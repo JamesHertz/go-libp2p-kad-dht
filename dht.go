@@ -36,6 +36,8 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	"go.opencensus.io/tag"
 	"go.uber.org/zap"
+
+	debug "log" // my log :)
 )
 
 var (
@@ -410,6 +412,7 @@ func makeRoutingTable(dht *IpfsDHT, cfg dhtcfg.Config, maxLastSuccessfulOutbound
 		} else {
 			cmgr.TagPeer(p, kbucketTag, baseConnMgrScore)
 		}
+		debug.Println("peer-added  :", p) // ADDED
 	}
 	rt.PeerRemoved = func(p peer.ID) {
 		cmgr.Unprotect(p, kbucketTag)
@@ -417,8 +420,8 @@ func makeRoutingTable(dht *IpfsDHT, cfg dhtcfg.Config, maxLastSuccessfulOutbound
 
 		// try to fix the RT
 		dht.fixRTIfNeeded()
+		debug.Println("peer-removed:", p) // ADDED
 	}
-
 	return rt, err
 }
 
@@ -591,7 +594,7 @@ func (dht *IpfsDHT) rtPeerLoop(proc goprocess.Process) {
 		select {
 		case <-timerCh:
 			dht.routingTable.MarkAllPeersIrreplaceable()
-		case addReq := <-dht.addPeerToRTChan:
+		case addReq := <-dht.addPeerToRTChan: // right here :)
 			prevSize := dht.routingTable.Size()
 			if prevSize == 0 {
 				isBootsrapping = true

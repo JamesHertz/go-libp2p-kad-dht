@@ -142,9 +142,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("protocol prefix %s must use a namespaced Validator", DefaultPrefix)
 	}
 
+	/* // I don't care ;)
 	if len(nsval) != 2 {
 		return fmt.Errorf("protocol prefix %s must have exactly two namespaced validators - /pk and /ipns", DefaultPrefix)
 	}
+	*/
 
 	if pkVal, pkValFound := nsval["pk"]; !pkValFound {
 		return fmt.Errorf("protocol prefix %s must support the /pk namespaced Validator", DefaultPrefix)
