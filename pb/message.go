@@ -1,6 +1,8 @@
 package dht_pb
 
 import (
+	"fmt"
+
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
@@ -15,18 +17,55 @@ type PeerRoutingInfo struct {
 	network.Connectedness
 }
 
+// TODO: CHANGE FEATURES LIST THING :)
+
+// type marshableMsg interface {
+// 	XXX_Unmarshal([]byte) error
+// 	XXX_Marshal([]byte, bool) ([]byte, error)
+// 	XXX_Size() int
+// }
+
+func (msg *Message) GetIpfsMsg() (*IpfsMessage, error) {
+	res := &IpfsMessage{}
+	if err := res.XXX_Unmarshal(msg.Data); err != nil {
+		return nil, fmt.Errorf("Invalid IpfsMsg: %v")
+	}
+	return res, nil
+}
+
+func (msg *Message) GetBareMsg() (*Message_BareMsg,error) {
+	res := &Message_BareMsg{}
+	if err := res.XXX_Unmarshal(msg.Data); err != nil {
+		return nil, fmt.Errorf("Invalid BareMsg: %v")
+	}
+	return res, nil
+}
+
+func ToDhtMessage[
+	T interface {
+		XXX_Marshal([]byte, bool) ([]byte, error)
+		XXX_Size() int
+}] (msg T, feature peer.Feature) *Message {
+	aux := make([]byte, msg.XXX_Size())
+	data, _ := msg.XXX_Marshal(aux, false)
+	return &Message{
+		Feature: string(feature),
+		Data: data,
+	}
+}
+
 // NewMessage constructs a new dht message with given type, key, and level
-func NewMessage(typ Message_MessageType, key []byte, level int) *Message {
-	m := &Message{
-		Type: typ,
+func NewIpfsMsg(key []byte, level int) *IpfsMessage {
+	m := &IpfsMessage{
 		Key:  key,
 	}
 	m.SetClusterLevel(level)
 	return m
 }
 
-func peerRoutingInfoToPBPeer(p PeerRoutingInfo) Message_Peer {
-	var pbp Message_Peer
+
+func peerRoutingInfoToPBPeer(p PeerRoutingInfo) *Peer{
+	var pbp Peer 
 
 	pbp.Addrs = make([][]byte, len(p.Addrs))
 	for i, maddr := range p.Addrs {
@@ -34,22 +73,23 @@ func peerRoutingInfoToPBPeer(p PeerRoutingInfo) Message_Peer {
 	}
 	pbp.Id = byteString(p.ID)
 	pbp.Connection = ConnectionType(p.Connectedness)
-	return pbp
+	return &pbp
 }
 
-func peerInfoToPBPeer(p peer.AddrInfo) Message_Peer {
-	var pbp Message_Peer
+func peerInfoToPBPeer(p peer.AddrInfo) *Peer{
+	var pbp Peer
 
 	pbp.Addrs = make([][]byte, len(p.Addrs))
 	for i, maddr := range p.Addrs {
 		pbp.Addrs[i] = maddr.Bytes() // Bytes, not String. Compressed.
 	}
 	pbp.Id = byteString(p.ID)
-	return pbp
+	pbp.Features = nil // TODO: change this :)
+	return &pbp
 }
 
 // PBPeerToPeer turns a *Message_Peer into its peer.AddrInfo counterpart
-func PBPeerToPeerInfo(pbp Message_Peer) peer.AddrInfo {
+func PBPeerToPeerInfo(pbp Peer) peer.AddrInfo {
 	return peer.AddrInfo{
 		ID:    peer.ID(pbp.Id),
 		Addrs: pbp.Addresses(),
@@ -58,8 +98,8 @@ func PBPeerToPeerInfo(pbp Message_Peer) peer.AddrInfo {
 
 // RawPeerInfosToPBPeers converts a slice of Peers into a slice of *Message_Peers,
 // ready to go out on the wire.
-func RawPeerInfosToPBPeers(peers []peer.AddrInfo) []Message_Peer {
-	pbpeers := make([]Message_Peer, len(peers))
+func RawPeerInfosToPBPeers(peers []peer.AddrInfo) []*Peer{
+	pbpeers := make([]*Peer, len(peers))
 	for i, p := range peers {
 		pbpeers[i] = peerInfoToPBPeer(p)
 	}
@@ -70,7 +110,7 @@ func RawPeerInfosToPBPeers(peers []peer.AddrInfo) []Message_Peer {
 // which can be written to a message and sent out. the key thing this function
 // does (in addition to PeersToPBPeers) is set the ConnectionType with
 // information from the given network.Network.
-func PeerInfosToPBPeers(n network.Network, peers []peer.AddrInfo) []Message_Peer {
+func PeerInfosToPBPeers(n network.Network, peers []peer.AddrInfo) []*Peer{
 	pbps := RawPeerInfosToPBPeers(peers)
 	for i, pbp := range pbps {
 		c := ConnectionType(n.Connectedness(peers[i].ID))
@@ -79,8 +119,8 @@ func PeerInfosToPBPeers(n network.Network, peers []peer.AddrInfo) []Message_Peer
 	return pbps
 }
 
-func PeerRoutingInfosToPBPeers(peers []PeerRoutingInfo) []Message_Peer {
-	pbpeers := make([]Message_Peer, len(peers))
+func PeerRoutingInfosToPBPeers(peers []PeerRoutingInfo) []*Peer {
+	pbpeers := make([]*Peer, len(peers))
 	for i, p := range peers {
 		pbpeers[i] = peerRoutingInfoToPBPeer(p)
 	}
@@ -89,7 +129,7 @@ func PeerRoutingInfosToPBPeers(peers []PeerRoutingInfo) []Message_Peer {
 
 // PBPeersToPeerInfos converts given []*Message_Peer into []peer.AddrInfo
 // Invalid addresses will be silently omitted.
-func PBPeersToPeerInfos(pbps []Message_Peer) []*peer.AddrInfo {
+func PBPeersToPeerInfos(pbps []Peer) []*peer.AddrInfo {
 	peers := make([]*peer.AddrInfo, 0, len(pbps))
 	for _, pbp := range pbps {
 		ai := PBPeerToPeerInfo(pbp)
@@ -99,7 +139,7 @@ func PBPeersToPeerInfos(pbps []Message_Peer) []*peer.AddrInfo {
 }
 
 // Addresses returns a multiaddr associated with the Message_Peer entry
-func (m *Message_Peer) Addresses() []ma.Multiaddr {
+func (m *Peer ) Addresses() []ma.Multiaddr {
 	if m == nil {
 		return nil
 	}
@@ -120,7 +160,7 @@ func (m *Message_Peer) Addresses() []ma.Multiaddr {
 // GetClusterLevel gets and adjusts the cluster level on the message.
 // a +/- 1 adjustment is needed to distinguish a valid first level (1) and
 // default "no value" protobuf behavior (0)
-func (m *Message) GetClusterLevel() int {
+func (m *IpfsMessage) GetClusterLevel() int {
 	level := m.GetClusterLevelRaw() - 1
 	if level < 0 {
 		return 0
@@ -131,41 +171,41 @@ func (m *Message) GetClusterLevel() int {
 // SetClusterLevel adjusts and sets the cluster level on the message.
 // a +/- 1 adjustment is needed to distinguish a valid first level (1) and
 // default "no value" protobuf behavior (0)
-func (m *Message) SetClusterLevel(level int) {
+func (m *IpfsMessage) SetClusterLevel(level int) {
 	lvl := int32(level)
 	m.ClusterLevelRaw = lvl + 1
 }
 
 // ConnectionType returns a Message_ConnectionType associated with the
 // network.Connectedness.
-func ConnectionType(c network.Connectedness) Message_ConnectionType {
+func ConnectionType(c network.Connectedness) Peer_ConnectionType{
 	switch c {
 	default:
-		return Message_NOT_CONNECTED
+		return Peer_NOT_CONNECTED //Message_NOT_CONNECTED
 	case network.NotConnected:
-		return Message_NOT_CONNECTED
+		return Peer_NOT_CONNECTED // Message_NOT_CONNECTED
 	case network.Connected:
-		return Message_CONNECTED
+		return Peer_CONNECTED //Message_CONNECTED
 	case network.CanConnect:
-		return Message_CAN_CONNECT
+		return Peer_CAN_CONNECT //Message_CAN_CONNECT
 	case network.CannotConnect:
-		return Message_CANNOT_CONNECT
+		return Peer_CANNOT_CONNECT //Message_CANNOT_CONNECT
 	}
 }
 
 // Connectedness returns an network.Connectedness associated with the
 // Message_ConnectionType.
-func Connectedness(c Message_ConnectionType) network.Connectedness {
+func Connectedness(c Peer_ConnectionType) network.Connectedness {
 	switch c {
 	default:
 		return network.NotConnected
-	case Message_NOT_CONNECTED:
+	case Peer_NOT_CONNECTED: //Message_NOT_CONNECTED:
 		return network.NotConnected
-	case Message_CONNECTED:
+	case Peer_CONNECTED: //Message_CONNECTED:
 		return network.Connected
-	case Message_CAN_CONNECT:
+	case Peer_CAN_CONNECT: //Message_CAN_CONNECT:
 		return network.CanConnect
-	case Message_CANNOT_CONNECT:
+	case Peer_CANNOT_CONNECT: //Message_CANNOT_CONNECT:
 		return network.CannotConnect
 	}
 }

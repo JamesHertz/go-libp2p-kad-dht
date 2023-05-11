@@ -70,6 +70,10 @@ const (
 	protectedBuckets = 2
 )
 
+// const featuresList = peer.FeatureList{
+// 
+// }
+
 type addPeerRTReq struct {
 	p         peer.ID
 	queryPeer bool
@@ -398,7 +402,8 @@ func makeRoutingTable(dht *IpfsDHT, cfg dhtcfg.Config, maxLastSuccessfulOutbound
 		filter = df
 	}
 
-	rt, err := kb.NewRoutingTable(cfg.BucketSize, dht.selfKey, time.Minute, dht.host.Peerstore(), maxLastSuccessfulOutboundThreshold, filter)
+	// FIXED :)
+	rt, err := kb.NewRoutingTable(cfg.BucketSize, dht.selfKey, DHTFeatures, time.Minute, dht.host.Peerstore(), maxLastSuccessfulOutboundThreshold, filter)
 	if err != nil {
 		return nil, err
 	}

@@ -19,32 +19,65 @@ import (
 	"github.com/multiformats/go-base32"
 )
 
+
+// features
+// TODO: think about enabling features or not :)
+const (
+	IPFS_GET_PROVIDERS =  "/ipfs/getproviders"
+	IPFS_PUT_PROVIDERS =  "/ipfs/putproviders"
+	GENERIC_GET =  "/ipfs/get"
+	GENERIC_PUT =  "/ipfs/put"
+	PING        =  "/ipfs/ping"
+	BARE_LOOKUP =  "/libp2p/barelookup"
+)
+
+var DHTFeatures = peer.FeatureList{
+	IPFS_GET_PROVIDERS,
+	IPFS_GET_PROVIDERS,
+	GENERIC_GET,
+	GENERIC_PUT,
+	PING,
+	BARE_LOOKUP,
+};
+
 // dhthandler specifies the signature of functions that handle DHT messages.
+// type dhtHandler func(context.Context, peer.ID, *pb.Message) (*pb.Message, error)
 type dhtHandler func(context.Context, peer.ID, *pb.Message) (*pb.Message, error)
 
-func (dht *IpfsDHT) handlerForMsgType(t pb.Message_MessageType) dhtHandler {
+func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 	// TODO: THINK ABOUT THIS
+
+
+	switch t {
+	case BARE_LOOKUP:
+		return dht.handleFindPeer
+	case PING:
+		return dht.handlePing
+	}
+
+	/*
 	switch t {
 	case pb.Message_FIND_NODE:
 		return dht.handleFindPeer
 	case pb.Message_PING:
 		return dht.handlePing
 	}
+	*/
 
 	if dht.enableValues {
 		switch t {
-		case pb.Message_GET_VALUE:
+		case GENERIC_GET: //pb.Message_GET_VALUE:
 			return dht.handleGetValue
-		case pb.Message_PUT_VALUE:
+		case GENERIC_PUT: //pb.Message_PUT_VALUE:
 			return dht.handlePutValue
 		}
 	}
 
 	if dht.enableProviders {
 		switch t {
-		case pb.Message_ADD_PROVIDER:
+		case IPFS_PUT_PROVIDERS: //pb.Message_ADD_PROVIDER:
 			return dht.handleAddProvider
-		case pb.Message_GET_PROVIDERS:
+		case IPFS_GET_PROVIDERS: //pb.Message_GET_PROVIDERS:
 			return dht.handleGetProviders
 		}
 	}
@@ -53,14 +86,20 @@ func (dht *IpfsDHT) handlerForMsgType(t pb.Message_MessageType) dhtHandler {
 }
 
 func (dht *IpfsDHT) handleGetValue(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, err error) {
+	msg, err := pmes.GetIpfsMsg()
+
+	if err != nil {
+		return nil, err
+	}
+
 	// first, is there even a key?
-	k := pmes.GetKey()
+	k := msg.GetKey() //pmes.GetKey()
 	if len(k) == 0 {
 		return nil, errors.New("handleGetValue but no key was provided")
 	}
 
 	// setup response
-	resp := pb.NewMessage(pmes.GetType(), pmes.GetKey(), pmes.GetClusterLevel())
+	resp := pb.NewIpfsMsg(msg.GetKey(), msg.GetClusterLevel())
 
 	rec, err := dht.checkLocalDatastore(ctx, k)
 	if err != nil {
@@ -87,7 +126,7 @@ func (dht *IpfsDHT) handleGetValue(ctx context.Context, p peer.ID, pmes *pb.Mess
 		resp.CloserPeers = pb.PeerInfosToPBPeers(dht.host.Network(), closerinfos)
 	}
 
-	return resp, nil
+	return pb.ToDhtMessage(msg, peer.Feature(pmes.GetFeature())), nil
 }
 
 func (dht *IpfsDHT) checkLocalDatastore(ctx context.Context, k []byte) (*recpb.Record, error) {
@@ -150,17 +189,23 @@ func cleanRecord(rec *recpb.Record) {
 
 // Store a value in this peer local storage
 func (dht *IpfsDHT) handlePutValue(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, err error) {
-	if len(pmes.GetKey()) == 0 {
+	msg, err := pmes.GetIpfsMsg()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(msg.GetKey()) == 0 {
 		return nil, errors.New("handleGetValue but no key was provided")
 	}
 
-	rec := pmes.GetRecord()
+	rec := msg.GetRecord()
 	if rec == nil {
 		logger.Debugw("got nil record from", "from", p)
 		return nil, errors.New("nil record")
 	}
 
-	if !bytes.Equal(pmes.GetKey(), rec.GetKey()) {
+	if !bytes.Equal(msg.GetKey(), rec.GetKey()) {
 		return nil, errors.New("put key doesn't match record key")
 	}
 
@@ -215,7 +260,7 @@ func (dht *IpfsDHT) handlePutValue(ctx context.Context, p peer.ID, pmes *pb.Mess
 	}
 
 	err = dht.datastore.Put(ctx, dskey, data)
-	return pmes, err
+	return pb.ToDhtMessage(msg, peer.Feature(pmes.GetFeature())), err
 }
 
 // returns nil, nil when either nothing is found or the value found doesn't properly validate.
@@ -254,15 +299,23 @@ func (dht *IpfsDHT) handlePing(_ context.Context, p peer.ID, pmes *pb.Message) (
 }
 
 func (dht *IpfsDHT) handleFindPeer(ctx context.Context, from peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
-	resp := pb.NewMessage(pmes.GetType(), nil, pmes.GetClusterLevel())
+	msg, err := pmes.GetBareMsg()
+
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: ask about this 
+	// resp := pb.NewMessage(pmes.GetType(), nil, pmes.GetClusterLevel())
+	resp := &pb.Message_BareMsg{}
 	var closest []peer.ID
 
-	if len(pmes.GetKey()) == 0 {
+	if len(msg.GetPeerID()) == 0 {
 		return nil, fmt.Errorf("handleFindPeer with empty key")
 	}
 
 	// if looking for self... special case where we send it on CloserPeers.
-	targetPid := peer.ID(pmes.GetKey())
+	targetPid := peer.ID(msg.GetPeerID())
 	if targetPid == dht.self {
 		closest = []peer.ID{dht.self}
 	} else {
@@ -290,7 +343,7 @@ func (dht *IpfsDHT) handleFindPeer(ctx context.Context, from peer.ID, pmes *pb.M
 	}
 
 	if closest == nil {
-		return resp, nil
+		return pb.ToDhtMessage(resp, peer.Feature(pmes.Feature)), nil
 	}
 
 	// TODO: pstore.PeerInfos should move to core (=> peerstore.AddrInfos).
@@ -303,8 +356,8 @@ func (dht *IpfsDHT) handleFindPeer(ctx context.Context, from peer.ID, pmes *pb.M
 		}
 	}
 
-	resp.CloserPeers = pb.PeerInfosToPBPeers(dht.host.Network(), withAddresses)
-	return resp, nil
+	resp.CloserPeer = pb.PeerInfosToPBPeers(dht.host.Network(), withAddresses)
+	return pb.ToDhtMessage(resp, peer.Feature(pmes.Feature)), nil
 }
 
 func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {

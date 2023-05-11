@@ -126,4 +126,4 @@ replace github.com/libp2p/go-libp2p-kbucket => ../go-libp2p-kbucket/
 
 replace github.com/libp2p/go-libp2p => ../go-libp2p/
 
-replace github.com/libp2p/go-libp2p-record => /Users/jhertz/nova_linics/research/repos/go-libp2p-record
+replace github.com/libp2p/go-libp2p-record => ../go-libp2p-record

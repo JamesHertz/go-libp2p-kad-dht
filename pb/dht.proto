@@ -40,17 +40,18 @@ message Peer {
 	repeated string features = 4;
 }
 
-message DHTMessage {
-	message ClosestPeerMsg {
-		bytes id = 1 [(gogoproto.customtype) = "byteString", (gogoproto.nullable) = false];
-		repeated Peer closestPeer = 2;
+message Message {
+	message BareMsg {
+		string peerID = 1; //[(gogoproto.customtype) = "byteString", (gogoproto.nullable) = false];
+		repeated Peer closerPeer = 2 [(gogoproto.nullable) = false];;
 	}
 
 	string feature = 1;
 	bytes data     = 2;
 }
 
-message IpfsDHTMessage {
+message IpfsMessage {
+	/*
 	enum MessageType {
 		PUT_VALUE = 0;
 		GET_VALUE = 1;
@@ -62,6 +63,7 @@ message IpfsDHTMessage {
 
 	// defines what type of message it is.
 	MessageType type = 1;
+	*/
 
 	// defines what coral cluster level this query/response belongs to.
 	// in case we want to implement coral's cluster rings in the future.
