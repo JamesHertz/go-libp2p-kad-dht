@@ -23,6 +23,7 @@ import (
 type dhtHandler func(context.Context, peer.ID, *pb.Message) (*pb.Message, error)
 
 func (dht *IpfsDHT) handlerForMsgType(t pb.Message_MessageType) dhtHandler {
+	// TODO: THINK ABOUT THIS
 	switch t {
 	case pb.Message_FIND_NODE:
 		return dht.handleFindPeer

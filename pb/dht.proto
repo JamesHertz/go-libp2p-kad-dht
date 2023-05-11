@@ -11,16 +11,7 @@ package dht.pb;
 import "github.com/libp2p/go-libp2p-record/pb/record.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
-message Message {
-	enum MessageType {
-		PUT_VALUE = 0;
-		GET_VALUE = 1;
-		ADD_PROVIDER = 2;
-		GET_PROVIDERS = 3;
-		FIND_NODE = 4;
-		PING = 5;
-	}
-
+message Peer {
 	enum ConnectionType {
 		// sender does not have a connection to peer, and no extra information (default)
 		NOT_CONNECTED = 0;
@@ -36,15 +27,37 @@ message Message {
 		CANNOT_CONNECT = 3;
 	}
 
-	message Peer {
-		// ID of a given peer.
+	// ID of a given peer.
+	bytes id = 1 [(gogoproto.customtype) = "byteString", (gogoproto.nullable) = false];
+
+	// multiaddrs for a given peer
+	repeated bytes addrs = 2;
+
+	// used to signal the sender's connection capabilities to the peer
+	ConnectionType connection = 3;
+
+	// features list of the node :)
+	repeated string features = 4;
+}
+
+message DHTMessage {
+	message ClosestPeerMsg {
 		bytes id = 1 [(gogoproto.customtype) = "byteString", (gogoproto.nullable) = false];
+		repeated Peer closestPeer = 2;
+	}
 
-		// multiaddrs for a given peer
-		repeated bytes addrs = 2;
+	string feature = 1;
+	bytes data     = 2;
+}
 
-		// used to signal the sender's connection capabilities to the peer
-		ConnectionType connection = 3;
+message IpfsDHTMessage {
+	enum MessageType {
+		PUT_VALUE = 0;
+		GET_VALUE = 1;
+		ADD_PROVIDER = 2;
+		GET_PROVIDERS = 3;
+		// FIND_NODE = 4;
+		PING = 4;
 	}
 
 	// defines what type of message it is.

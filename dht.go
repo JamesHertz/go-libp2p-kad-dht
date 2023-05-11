@@ -284,7 +284,7 @@ func makeDHT(ctx context.Context, h host.Host, cfg dhtcfg.Config) (*IpfsDHT, err
 		selfKey:                kb.ConvertPeerID(h.ID()),
 		peerstore:              h.Peerstore(),
 		host:                   h,
-		birth:                  time.Now(),
+		birth:                  time.Now(), // todo think about this
 		protocols:              protocols,
 		serverProtocols:        serverProtocols,
 		bucketSize:             cfg.BucketSize,
