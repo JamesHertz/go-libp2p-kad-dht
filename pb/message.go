@@ -41,6 +41,10 @@ func (msg *Message) GetBareMsg() (*Message_BareMsg,error) {
 	return res, nil
 }
 
+func (msg * Message) GetMsgFeature() peer.Feature {
+	return peer.Feature(msg.Feature)
+}
+
 func ToDhtMessage[
 	T interface {
 		XXX_Marshal([]byte, bool) ([]byte, error)
@@ -76,7 +80,7 @@ func peerRoutingInfoToPBPeer(p PeerRoutingInfo) *Peer{
 	return &pbp
 }
 
-func peerInfoToPBPeer(p peer.AddrInfo) *Peer{
+func peerInfoToPBPeer(p peer.AddrInfo) Peer{
 	var pbp Peer
 
 	pbp.Addrs = make([][]byte, len(p.Addrs))
@@ -85,7 +89,7 @@ func peerInfoToPBPeer(p peer.AddrInfo) *Peer{
 	}
 	pbp.Id = byteString(p.ID)
 	pbp.Features = nil // TODO: change this :)
-	return &pbp
+	return pbp
 }
 
 // PBPeerToPeer turns a *Message_Peer into its peer.AddrInfo counterpart
@@ -98,8 +102,8 @@ func PBPeerToPeerInfo(pbp Peer) peer.AddrInfo {
 
 // RawPeerInfosToPBPeers converts a slice of Peers into a slice of *Message_Peers,
 // ready to go out on the wire.
-func RawPeerInfosToPBPeers(peers []peer.AddrInfo) []*Peer{
-	pbpeers := make([]*Peer, len(peers))
+func RawPeerInfosToPBPeers(peers []peer.AddrInfo) []Peer{
+	pbpeers := make([]Peer, len(peers))
 	for i, p := range peers {
 		pbpeers[i] = peerInfoToPBPeer(p)
 	}
@@ -110,7 +114,7 @@ func RawPeerInfosToPBPeers(peers []peer.AddrInfo) []*Peer{
 // which can be written to a message and sent out. the key thing this function
 // does (in addition to PeersToPBPeers) is set the ConnectionType with
 // information from the given network.Network.
-func PeerInfosToPBPeers(n network.Network, peers []peer.AddrInfo) []*Peer{
+func PeerInfosToPBPeers(n network.Network, peers []peer.AddrInfo) []Peer{
 	pbps := RawPeerInfosToPBPeers(peers)
 	for i, pbp := range pbps {
 		c := ConnectionType(n.Connectedness(peers[i].ID))

@@ -73,19 +73,40 @@ func TestBadMessage(t *testing.T) {
 
 	dht := setupDHT(ctx, t, false)
 
-	for _, typ := range []pb.Message_MessageType{
-		pb.Message_PUT_VALUE, pb.Message_GET_VALUE, pb.Message_ADD_PROVIDER,
-		pb.Message_GET_PROVIDERS, pb.Message_FIND_NODE,
-	} {
+	features := peer.FeatureList{
+		GENERIC_PUT,
+		GENERIC_GET,
+		IPFS_ADD_PROVIDERS,
+		IPFS_GET_PROVIDERS,
+		BARE_LOOKUP,
+	}
+
+	for _, typ := range features {
 		msg := &pb.Message{
-			Type: typ,
+			Feature: string(typ),
 			// explicitly avoid the key.
 		}
 		_, err := dht.handlerForMsgType(typ)(ctx, dht.Host().ID(), msg)
 		if err == nil {
-			t.Fatalf("expected processing message to fail for type %s", pb.Message_FIND_NODE)
+			t.Fatalf("expected processing message to fail for type %s", BARE_LOOKUP)
 		}
+
 	}
+	/*
+		 for _, typ := range []pb.Message_MessageType{
+			pb.Message_PUT_VALUE, pb.Message_GET_VALUE, pb.Message_ADD_PROVIDER,
+			pb.Message_GET_PROVIDERS, pb.Message_FIND_NODE,
+		} {
+			msg := &pb.Message{
+				Type: typ,
+				// explicitly avoid the key.
+			}
+			_, err := dht.handlerForMsgType(typ)(ctx, dht.Host().ID(), msg)
+			if err == nil {
+				t.Fatalf("expected processing message to fail for type %s", pb.Message_FIND_NODE)
+			}
+		}
+	*/
 }
 
 func BenchmarkHandleFindPeer(b *testing.B) {
@@ -124,9 +145,11 @@ func BenchmarkHandleFindPeer(b *testing.B) {
 
 	var reqs []*pb.Message
 	for i := 0; i < b.N; i++ {
-		reqs = append(reqs, &pb.Message{
-			Key: []byte("asdasdasd"),
-		})
+		reqs = append(reqs, pb.ToDhtMessage(
+			&pb.IpfsMessage{
+				Key: []byte("asdasdasd"),
+			}, "",
+		))
 	}
 	b.ReportAllocs()
 	b.ResetTimer()

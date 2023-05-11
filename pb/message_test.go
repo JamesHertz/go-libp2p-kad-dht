@@ -5,7 +5,7 @@ import (
 )
 
 func TestBadAddrsDontReturnNil(t *testing.T) {
-	mp := new(Message_Peer)
+	mp := new(Peer)
 	mp.Addrs = [][]byte{[]byte("NOT A VALID MULTIADDR")}
 
 	addrs := mp.Addresses()
