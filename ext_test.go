@@ -215,7 +215,7 @@ func TestGetFailures(t *testing.T) {
 		pbr := protoio.NewDelimitedReader(s, network.MessageSizeMax)
 		pbw := protoio.NewDelimitedWriter(s)
 
-		if err := pbw.WriteMsg(&req); err != nil {
+		if err := pbw.WriteMsg(req); err != nil {
 			t.Fatal(err)
 		}
 
@@ -223,10 +223,16 @@ func TestGetFailures(t *testing.T) {
 		if err := pbr.ReadMsg(pmes); err != nil {
 			t.Fatal(err)
 		}
-		if pmes.GetRecord() != nil {
+
+		msg, err := pmes.GetIpfsMsg()
+		if err != nil {
+			t.Fatal("invalid ipfs msg")
+		}
+
+		if msg.GetRecord() != nil {
 			t.Fatal("shouldnt have value")
 		}
-		if pmes.GetProviderPeers() != nil {
+		if msg.GetProviderPeers() != nil {
 			t.Fatal("shouldnt have provider peers")
 		}
 	}
@@ -273,6 +279,30 @@ func TestNotFound(t *testing.T) {
 					return
 				}
 
+				switch pmes.GetMsgFeature() {
+				case pb.GENERIC_GET:
+					ps := []peer.AddrInfo{}
+					for i := 0; i < 7; i++ {
+						p := hosts[rand.Intn(len(hosts))].ID()
+						pi := host.Peerstore().PeerInfo(p)
+						ps = append(ps, pi)
+					}
+
+					resp := pb.ToDhtMessage(
+						&pb.IpfsMessage{
+							CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), ps),
+						},
+						pmes.GetMsgFeature(),
+					)
+					if err := pbw.WriteMsg(resp); err != nil {
+						return
+					}
+				default:
+					panic("Shouldnt recieve this.")
+
+				}
+
+				/*
 				switch pmes.GetType() {
 				case pb.Message_GET_VALUE:
 					resp := &pb.Message{Type: pmes.Type}
@@ -291,6 +321,7 @@ func TestNotFound(t *testing.T) {
 				default:
 					panic("Shouldnt recieve this.")
 				}
+				*/
 			})
 		}
 		for _, peer := range hosts {
@@ -369,7 +400,24 @@ func TestLessThanKResponses(t *testing.T) {
 				if err := pbr.ReadMsg(pmes); err != nil {
 					panic(err)
 				}
+				switch pmes.GetMsgFeature(){
+				case pb.GENERIC_GET:
+					pi := host.Peerstore().PeerInfo(hosts[1].ID())
+					resp := pb.ToDhtMessage(
+						&pb.IpfsMessage{
+							CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),
+						},
+						pmes.GetMsgFeature(),
+					)
 
+					if err := pbw.WriteMsg(resp); err != nil {
+						panic(err)
+					}
+				default:
+					panic("Shouldnt recieve this.")
+				}
+
+				/*
 				switch pmes.GetType() {
 				case pb.Message_GET_VALUE:
 					pi := host.Peerstore().PeerInfo(hosts[1].ID())
@@ -384,6 +432,7 @@ func TestLessThanKResponses(t *testing.T) {
 				default:
 					panic("Shouldnt recieve this.")
 				}
+				*/
 
 			})
 		}
@@ -440,6 +489,21 @@ func TestMultipleQueries(t *testing.T) {
 				panic(err)
 			}
 
+
+			switch pmes.GetMsgFeature() {
+			case pb.GENERIC_GET:
+				pi := hosts[1].Peerstore().PeerInfo(hosts[0].ID())
+				resp := pb.ToDhtMessage(&pb.IpfsMessage{
+					CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),
+				}, pmes.GetMsgFeature())
+
+				if err := pbw.WriteMsg(resp); err != nil {
+					panic(err)
+				}
+			default:
+				panic("Shouldnt recieve this.")
+			}
+			/*
 			switch pmes.GetType() {
 			case pb.Message_GET_VALUE:
 				pi := hosts[1].Peerstore().PeerInfo(hosts[0].ID())
@@ -454,6 +518,7 @@ func TestMultipleQueries(t *testing.T) {
 			default:
 				panic("Shouldnt recieve this.")
 			}
+			*/
 		})
 	}
 

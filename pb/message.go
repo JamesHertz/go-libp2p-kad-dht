@@ -10,7 +10,6 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-
 var log = logging.Logger("dht.pb")
 
 type PeerRoutingInfo struct {
@@ -26,6 +25,7 @@ type PeerRoutingInfo struct {
 // 	XXX_Size() int
 // }
 
+// TODO: think about deduplicating this thing
 func (msg *Message) GetIpfsMsg() (*IpfsMessage, error) {
 	res := &IpfsMessage{}
 	if err := res.XXX_Unmarshal(msg.Data); err != nil {
@@ -34,7 +34,7 @@ func (msg *Message) GetIpfsMsg() (*IpfsMessage, error) {
 	return res, nil
 }
 
-func (msg *Message) GetBareMsg() (*Message_BareMsg,error) {
+func (msg *Message) GetBareMsg() (*Message_BareMsg, error) {
 	res := &Message_BareMsg{}
 	if err := res.XXX_Unmarshal(msg.Data); err != nil {
 		return nil, fmt.Errorf("Invalid BareMsg: %v")
@@ -42,7 +42,7 @@ func (msg *Message) GetBareMsg() (*Message_BareMsg,error) {
 	return res, nil
 }
 
-func (msg * Message) GetMsgFeature() peer.Feature {
+func (msg *Message) GetMsgFeature() peer.Feature {
 	return peer.Feature(msg.Feature)
 }
 
@@ -50,27 +50,26 @@ func ToDhtMessage[
 	T interface {
 		XXX_Marshal([]byte, bool) ([]byte, error)
 		XXX_Size() int
-}] (msg T, feature peer.Feature) *Message {
+	}](msg T, feature peer.Feature) *Message {
 	aux := make([]byte, msg.XXX_Size())
 	data, _ := msg.XXX_Marshal(aux, false)
 	return &Message{
 		Feature: string(feature),
-		Data: data,
+		Data:    data,
 	}
 }
 
 // NewMessage constructs a new dht message with given type, key, and level
 func NewIpfsMsg(key []byte, level int) *IpfsMessage {
 	m := &IpfsMessage{
-		Key:  key,
+		Key: key,
 	}
 	m.SetClusterLevel(level)
 	return m
 }
 
-
-func peerRoutingInfoToPBPeer(p PeerRoutingInfo) *Peer{
-	var pbp Peer 
+func peerRoutingInfoToPBPeer(p PeerRoutingInfo) *Peer {
+	var pbp Peer
 
 	pbp.Addrs = make([][]byte, len(p.Addrs))
 	for i, maddr := range p.Addrs {
@@ -81,7 +80,7 @@ func peerRoutingInfoToPBPeer(p PeerRoutingInfo) *Peer{
 	return &pbp
 }
 
-func peerInfoToPBPeer(p peer.AddrInfo) Peer{
+func peerInfoToPBPeer(p peer.AddrInfo) Peer {
 	var pbp Peer
 
 	pbp.Addrs = make([][]byte, len(p.Addrs))
@@ -103,7 +102,7 @@ func PBPeerToPeerInfo(pbp Peer) peer.AddrInfo {
 
 // RawPeerInfosToPBPeers converts a slice of Peers into a slice of *Message_Peers,
 // ready to go out on the wire.
-func RawPeerInfosToPBPeers(peers []peer.AddrInfo) []Peer{
+func RawPeerInfosToPBPeers(peers []peer.AddrInfo) []Peer {
 	pbpeers := make([]Peer, len(peers))
 	for i, p := range peers {
 		pbpeers[i] = peerInfoToPBPeer(p)
@@ -115,7 +114,7 @@ func RawPeerInfosToPBPeers(peers []peer.AddrInfo) []Peer{
 // which can be written to a message and sent out. the key thing this function
 // does (in addition to PeersToPBPeers) is set the ConnectionType with
 // information from the given network.Network.
-func PeerInfosToPBPeers(n network.Network, peers []peer.AddrInfo) []Peer{
+func PeerInfosToPBPeers(n network.Network, peers []peer.AddrInfo) []Peer {
 	pbps := RawPeerInfosToPBPeers(peers)
 	for i, pbp := range pbps {
 		c := ConnectionType(n.Connectedness(peers[i].ID))
@@ -144,7 +143,7 @@ func PBPeersToPeerInfos(pbps []Peer) []*peer.AddrInfo {
 }
 
 // Addresses returns a multiaddr associated with the Message_Peer entry
-func (m *Peer ) Addresses() []ma.Multiaddr {
+func (m *Peer) Addresses() []ma.Multiaddr {
 	if m == nil {
 		return nil
 	}
@@ -183,7 +182,7 @@ func (m *IpfsMessage) SetClusterLevel(level int) {
 
 // ConnectionType returns a Message_ConnectionType associated with the
 // network.Connectedness.
-func ConnectionType(c network.Connectedness) Peer_ConnectionType{
+func ConnectionType(c network.Connectedness) Peer_ConnectionType {
 	switch c {
 	default:
 		return Peer_NOT_CONNECTED //Message_NOT_CONNECTED
