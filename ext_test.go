@@ -158,7 +158,7 @@ func TestGetFailures(t *testing.T) {
 			}
 
 			resp := &pb.Message{
-				Type: pmes.Type,
+				Feature: pmes.GetFeature(),
 			}
 			_ = pbw.WriteMsg(resp)
 		})
@@ -187,15 +187,24 @@ func TestGetFailures(t *testing.T) {
 
 	// Now we test this DHT's handleGetValue failure
 	{
-		typ := pb.Message_GET_VALUE
+		ftr := pb.GENERIC_GET //pb.Message_GET_VALUE
 		str := "hello"
 
 		rec := record.MakePutRecord(str, []byte("blah"))
-		req := pb.Message{
+		req := pb.ToDhtMessage(
+			&pb.IpfsMessage{
+				Key:    []byte(str),
+				Record: rec,
+			},
+			ftr,
+		)
+		/*
+		pb.Message{
 			Type:   typ,
 			Key:    []byte(str),
 			Record: rec,
 		}
+		*/
 
 		s, err := host2.NewStream(context.Background(), host1.ID(), d.protocols...)
 		if err != nil {

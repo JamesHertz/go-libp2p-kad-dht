@@ -19,24 +19,13 @@ import (
 	"github.com/multiformats/go-base32"
 )
 
-// features
-// TODO: think about enabling features or not :)
-const (
-	IPFS_GET_PROVIDERS peer.Feature = "/ipfs/getproviders"
-	IPFS_ADD_PROVIDERS              = "/ipfs/putproviders"
-	GENERIC_GET                     = "/ipfs/get"
-	GENERIC_PUT                     = "/ipfs/put"
-	PING                            = "/ipfs/ping"
-	BARE_LOOKUP                     = "/libp2p/barelookup"
-)
-
 var DHTFeatures = peer.FeatureList{
-	IPFS_GET_PROVIDERS,
-	IPFS_GET_PROVIDERS,
-	GENERIC_GET,
-	GENERIC_PUT,
-	PING,
-	BARE_LOOKUP,
+	pb.IPFS_GET_PROVIDERS,
+	pb.IPFS_GET_PROVIDERS,
+	pb.GENERIC_GET,
+	pb.GENERIC_PUT,
+	pb.PING,
+	pb.BARE_LOOKUP,
 }
 
 // dhthandler specifies the signature of functions that handle DHT messages.
@@ -47,9 +36,9 @@ func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 	// TODO: THINK ABOUT THIS
 
 	switch t {
-	case BARE_LOOKUP:
+	case pb.BARE_LOOKUP:
 		return dht.handleFindPeer
-	case PING:
+	case pb.PING:
 		return dht.handlePing
 	}
 
@@ -64,18 +53,18 @@ func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 
 	if dht.enableValues {
 		switch t {
-		case GENERIC_GET: //pb.Message_GET_VALUE:
+		case pb.GENERIC_GET: //pb.Message_GET_VALUE:
 			return dht.handleGetValue
-		case GENERIC_PUT: //pb.Message_PUT_VALUE:
+		case pb.GENERIC_PUT: //pb.Message_PUT_VALUE:
 			return dht.handlePutValue
 		}
 	}
 
 	if dht.enableProviders {
 		switch t {
-		case IPFS_ADD_PROVIDERS: //pb.Message_ADD_PROVIDER:
+		case pb.IPFS_ADD_PROVIDERS: //pb.Message_ADD_PROVIDER:
 			return dht.handleAddProvider
-		case IPFS_GET_PROVIDERS: //pb.Message_GET_PROVIDERS:
+		case pb.IPFS_GET_PROVIDERS: //pb.Message_GET_PROVIDERS:
 			return dht.handleGetProviders
 		}
 	}

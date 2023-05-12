@@ -10,6 +10,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
+
 var log = logging.Logger("dht.pb")
 
 type PeerRoutingInfo struct {
