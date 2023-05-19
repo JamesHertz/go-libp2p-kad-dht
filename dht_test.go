@@ -1261,7 +1261,7 @@ func TestAtomicPut(t *testing.T) {
 		pmes.Record = rec
 		// pmes := pb.NewMessage(pb.Message_PUT_VALUE, rec.Key, 0)
 		// pmes.Record = rec
-		_, err := d.handlePutValue(ctx, "testpeer", pb.ToDhtMessage(pmes, pb.GENERIC_PUT))
+		_, err := d.handlePutValue(ctx, "testpeer", pb.ToDhtMessage(pmes, pb.PUT_VALUE))
 		return err
 	}
 
@@ -1286,7 +1286,7 @@ func TestAtomicPut(t *testing.T) {
 	// pmes := pb.NewMessage(pb.Message_GET_VALUE, []byte(key), 0)
 	pmes := pb.ToDhtMessage(
 		pb.NewIpfsMsg([]byte(key), 0),
-		pb.GENERIC_GET,
+		pb.GET_VALUE,
 	)
 	var msg *pb.IpfsMessage
 	aux, err := d.handleGetValue(ctx, "testkey", pmes)

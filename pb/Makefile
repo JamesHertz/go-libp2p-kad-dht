@@ -4,11 +4,7 @@ GO = $(PB:.proto=.pb.go)
 all: $(GO)
 
 %.pb.go: %.proto
-		protoc --proto_path=$(GOPATH)/src:. --gogofast_out=. $<
-
-# my custom build having github.com/libp2p/go-lip2p-record in the dir ../..
-build: 
-		protoc --gogo_out=. -I=../../pb-files -I=./  -I=$(GOROOT)/src dht.proto
+		protoc -I=$(GOPATH)/src:. -I=../../pb-files --gogofast_out=. $<
 
 clean:
 		rm -f *.pb.go

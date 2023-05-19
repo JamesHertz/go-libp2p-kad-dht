@@ -28,7 +28,7 @@ type PeerRoutingInfo struct {
 // TODO: think about deduplicating this thing
 func (msg *Message) GetIpfsMsg() (*IpfsMessage, error) {
 	res := &IpfsMessage{}
-	if err := res.XXX_Unmarshal(msg.Data); err != nil {
+	if err := res.Unmarshal(msg.Data); err != nil {
 		return nil, fmt.Errorf("Invalid IpfsMsg: %v")
 	}
 	return res, nil
@@ -36,7 +36,8 @@ func (msg *Message) GetIpfsMsg() (*IpfsMessage, error) {
 
 func (msg *Message) GetBareMsg() (*Message_BareMsg, error) {
 	res := &Message_BareMsg{}
-	if err := res.XXX_Unmarshal(msg.Data); err != nil {
+	res.Marshal()
+	if err := res.Unmarshal(msg.Data); err != nil {
 		return nil, fmt.Errorf("Invalid BareMsg: %v")
 	}
 	return res, nil
@@ -48,11 +49,13 @@ func (msg *Message) GetMsgFeature() peer.Feature {
 
 func ToDhtMessage[
 	T interface {
-		XXX_Marshal([]byte, bool) ([]byte, error)
-		XXX_Size() int
+		Marshal() ([]byte, error)
+		Size() int
 	}](msg T, feature peer.Feature) *Message {
-	aux := make([]byte, msg.XXX_Size())
-	data, _ := msg.XXX_Marshal(aux, false)
+	data, err := msg.Marshal()
+	if err != nil {
+		panic("Error marshalling something... You have to fix this...")
+	}
 	return &Message{
 		Feature: string(feature),
 		Data:    data,

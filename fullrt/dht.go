@@ -940,10 +940,13 @@ func (dht *FullRT) ProvideMany(ctx context.Context, keys []multihash.Multihash) 
 	}
 
 	fn := func(ctx context.Context, p, k peer.ID) error {
-		pmes := dht_pb.NewMessage(dht_pb.Message_ADD_PROVIDER, multihash.Multihash(k), 0)
+		pmes := dht_pb.NewIpfsMsg(multihash.Multihash(k), 0)
+		//pmes := dht_pb.NewMessage(dht_pb.Message_ADD_PROVIDER, multihash.Multihash(k), 0)
 		pmes.ProviderPeers = pbPeers
 
-		return dht.messageSender.SendMessage(ctx, p, pmes)
+		return dht.messageSender.SendMessage(ctx, p, dht_pb.ToDhtMessage(
+			pmes, dht_pb.IPFS_ADD_PROVIDERS,
+		))
 	}
 
 	keysAsPeerIDs := make([]peer.ID, 0, len(keys))

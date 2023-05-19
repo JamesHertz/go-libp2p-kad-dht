@@ -40,7 +40,7 @@ func TestSkipRefreshOnGapCpls(t *testing.T) {
 
 			p, err := rt.GenRandPeerID(uint(u))
 			require.NoError(t, err)
-			b, err := rt.TryAddPeer(p, true, false)
+			b, err := rt.TryAddPeer(p, nil, true, false)
 			require.NoError(t, err)
 			require.True(t, b)
 			return nil
@@ -55,14 +55,14 @@ func TestSkipRefreshOnGapCpls(t *testing.T) {
 
 	// when 2*gapcpl < maxCpl
 	// gap is 2 and max is 10
-	rt, err := kb.NewRoutingTable(2, kb.ConvertPeerID(local), time.Hour, pstore.NewMetrics(), 100*time.Hour, nil)
+	rt, err := kb.NewRoutingTable(2, kb.ConvertPeerID(local), nil, time.Hour, pstore.NewMetrics(), 100*time.Hour, nil)
 	require.NoError(t, err)
 	r := &RtRefreshManager{ctx: ctx, rt: rt, refreshKeyGenFnc: kfnc, dhtPeerId: local}
 	icpl := uint(2)
 	lastCpl := 2 * (icpl + 1)
 	p, err := rt.GenRandPeerID(10)
 	require.NoError(t, err)
-	b, _ := rt.TryAddPeer(p, true, false)
+	b, _ := rt.TryAddPeer(p, nil, true, false)
 	require.True(t, b)
 	r.refreshQueryFnc = qFuncWithIgnore(rt, icpl)
 	require.NoError(t, r.doRefresh(true))
@@ -79,13 +79,13 @@ func TestSkipRefreshOnGapCpls(t *testing.T) {
 	}
 
 	// when 2 * (gapcpl + 1) > maxCpl
-	rt, err = kb.NewRoutingTable(2, kb.ConvertPeerID(local), time.Hour, pstore.NewMetrics(), 100*time.Hour, nil)
+	rt, err = kb.NewRoutingTable(2, kb.ConvertPeerID(local), nil, time.Hour, pstore.NewMetrics(), 100*time.Hour, nil)
 	require.NoError(t, err)
 	r = &RtRefreshManager{ctx: ctx, rt: rt, refreshKeyGenFnc: kfnc, dhtPeerId: local}
 	icpl = uint(6)
 	p, err = rt.GenRandPeerID(10)
 	require.NoError(t, err)
-	b, _ = rt.TryAddPeer(p, true, false)
+	b, _ = rt.TryAddPeer(p, nil, true, false)
 	require.True(t, b)
 	r.refreshQueryFnc = qFuncWithIgnore(rt, icpl)
 	require.NoError(t, r.doRefresh(true))

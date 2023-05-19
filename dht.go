@@ -70,10 +70,6 @@ const (
 	protectedBuckets = 2
 )
 
-// const featuresList = peer.FeatureList{
-// 
-// }
-
 type addPeerRTReq struct {
 	p         peer.ID
 	queryPeer bool
@@ -606,7 +602,8 @@ func (dht *IpfsDHT) rtPeerLoop(proc goprocess.Process) {
 				bootstrapCount = 0
 				timerCh = nil
 			}
-			newlyAdded, err := dht.routingTable.TryAddPeer(addReq.p, addReq.queryPeer, isBootsrapping)
+			// TODO: change this
+			newlyAdded, err := dht.routingTable.TryAddPeer(addReq.p, nil, addReq.queryPeer, isBootsrapping)
 			if err != nil {
 				// peer not added.
 				continue
@@ -695,14 +692,18 @@ func (dht *IpfsDHT) FindLocal(id peer.ID) peer.AddrInfo {
 	}
 }
 
+func (dht * IpfsDHT) GetFeaturesList() peer.FeatureList{
+	return nil
+}
+
 // nearestPeersToQuery returns the routing tables closest peers.
-func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) []peer.ID {
+func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.IpfsMessage, count int) []peer.ID {
 	closer := dht.routingTable.NearestPeers(kb.ConvertKey(string(pmes.GetKey())), count)
 	return closer
 }
 
 // betterPeersToQuery returns nearestPeersToQuery with some additional filtering
-func (dht *IpfsDHT) betterPeersToQuery(pmes *pb.Message, from peer.ID, count int) []peer.ID {
+func (dht *IpfsDHT) betterPeersToQuery(pmes *pb.IpfsMessage, from peer.ID, count int) []peer.ID {
 	closer := dht.nearestPeersToQuery(pmes, count)
 
 	// no node? nil

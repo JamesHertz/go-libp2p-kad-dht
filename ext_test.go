@@ -187,7 +187,7 @@ func TestGetFailures(t *testing.T) {
 
 	// Now we test this DHT's handleGetValue failure
 	{
-		ftr := pb.GENERIC_GET //pb.Message_GET_VALUE
+		ftr := pb.GET_VALUE //pb.Message_GET_VALUE
 		str := "hello"
 
 		rec := record.MakePutRecord(str, []byte("blah"))
@@ -199,11 +199,11 @@ func TestGetFailures(t *testing.T) {
 			ftr,
 		)
 		/*
-		pb.Message{
-			Type:   typ,
-			Key:    []byte(str),
-			Record: rec,
-		}
+			pb.Message{
+				Type:   typ,
+				Key:    []byte(str),
+				Record: rec,
+			}
 		*/
 
 		s, err := host2.NewStream(context.Background(), host1.ID(), d.protocols...)
@@ -280,7 +280,7 @@ func TestNotFound(t *testing.T) {
 				}
 
 				switch pmes.GetMsgFeature() {
-				case pb.GENERIC_GET:
+				case pb.GET_VALUE:
 					ps := []peer.AddrInfo{}
 					for i := 0; i < 7; i++ {
 						p := hosts[rand.Intn(len(hosts))].ID()
@@ -303,24 +303,24 @@ func TestNotFound(t *testing.T) {
 				}
 
 				/*
-				switch pmes.GetType() {
-				case pb.Message_GET_VALUE:
-					resp := &pb.Message{Type: pmes.Type}
+					switch pmes.GetType() {
+					case pb.Message_GET_VALUE:
+						resp := &pb.Message{Type: pmes.Type}
 
-					ps := []peer.AddrInfo{}
-					for i := 0; i < 7; i++ {
-						p := hosts[rand.Intn(len(hosts))].ID()
-						pi := host.Peerstore().PeerInfo(p)
-						ps = append(ps, pi)
-					}
+						ps := []peer.AddrInfo{}
+						for i := 0; i < 7; i++ {
+							p := hosts[rand.Intn(len(hosts))].ID()
+							pi := host.Peerstore().PeerInfo(p)
+							ps = append(ps, pi)
+						}
 
-					resp.CloserPeers = pb.PeerInfosToPBPeers(d.host.Network(), ps)
-					if err := pbw.WriteMsg(resp); err != nil {
-						return
+						resp.CloserPeers = pb.PeerInfosToPBPeers(d.host.Network(), ps)
+						if err := pbw.WriteMsg(resp); err != nil {
+							return
+						}
+					default:
+						panic("Shouldnt recieve this.")
 					}
-				default:
-					panic("Shouldnt recieve this.")
-				}
 				*/
 			})
 		}
@@ -400,8 +400,8 @@ func TestLessThanKResponses(t *testing.T) {
 				if err := pbr.ReadMsg(pmes); err != nil {
 					panic(err)
 				}
-				switch pmes.GetMsgFeature(){
-				case pb.GENERIC_GET:
+				switch pmes.GetMsgFeature() {
+				case pb.GET_VALUE:
 					pi := host.Peerstore().PeerInfo(hosts[1].ID())
 					resp := pb.ToDhtMessage(
 						&pb.IpfsMessage{
@@ -418,20 +418,20 @@ func TestLessThanKResponses(t *testing.T) {
 				}
 
 				/*
-				switch pmes.GetType() {
-				case pb.Message_GET_VALUE:
-					pi := host.Peerstore().PeerInfo(hosts[1].ID())
-					resp := &pb.Message{
-						Type:        pmes.Type,
-						CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),
-					}
+					switch pmes.GetType() {
+					case pb.Message_GET_VALUE:
+						pi := host.Peerstore().PeerInfo(hosts[1].ID())
+						resp := &pb.Message{
+							Type:        pmes.Type,
+							CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),
+						}
 
-					if err := pbw.WriteMsg(resp); err != nil {
-						panic(err)
+						if err := pbw.WriteMsg(resp); err != nil {
+							panic(err)
+						}
+					default:
+						panic("Shouldnt recieve this.")
 					}
-				default:
-					panic("Shouldnt recieve this.")
-				}
 				*/
 
 			})
@@ -489,9 +489,8 @@ func TestMultipleQueries(t *testing.T) {
 				panic(err)
 			}
 
-
 			switch pmes.GetMsgFeature() {
-			case pb.GENERIC_GET:
+			case pb.GET_VALUE:
 				pi := hosts[1].Peerstore().PeerInfo(hosts[0].ID())
 				resp := pb.ToDhtMessage(&pb.IpfsMessage{
 					CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),
@@ -504,20 +503,20 @@ func TestMultipleQueries(t *testing.T) {
 				panic("Shouldnt recieve this.")
 			}
 			/*
-			switch pmes.GetType() {
-			case pb.Message_GET_VALUE:
-				pi := hosts[1].Peerstore().PeerInfo(hosts[0].ID())
-				resp := &pb.Message{
-					Type:        pmes.Type,
-					CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),
-				}
+				switch pmes.GetType() {
+				case pb.Message_GET_VALUE:
+					pi := hosts[1].Peerstore().PeerInfo(hosts[0].ID())
+					resp := &pb.Message{
+						Type:        pmes.Type,
+						CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),
+					}
 
-				if err := pbw.WriteMsg(resp); err != nil {
-					panic(err)
+					if err := pbw.WriteMsg(resp); err != nil {
+						panic(err)
+					}
+				default:
+					panic("Shouldnt recieve this.")
 				}
-			default:
-				panic("Shouldnt recieve this.")
-			}
 			*/
 		})
 	}

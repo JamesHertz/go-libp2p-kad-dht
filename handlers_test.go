@@ -74,11 +74,11 @@ func TestBadMessage(t *testing.T) {
 	dht := setupDHT(ctx, t, false)
 
 	features := peer.FeatureList{
-		pb.GENERIC_PUT,
-		pb.GENERIC_GET,
+		pb.PUT_VALUE,
+		pb.GET_VALUE,
 		pb.IPFS_ADD_PROVIDERS,
 		pb.IPFS_GET_PROVIDERS,
-		pb.BARE_LOOKUP,
+		pb.FIND_CLOSEST_PEERS,
 	}
 
 	for _, typ := range features {
@@ -88,7 +88,7 @@ func TestBadMessage(t *testing.T) {
 		}
 		_, err := dht.handlerForMsgType(typ)(ctx, dht.Host().ID(), msg)
 		if err == nil {
-			t.Fatalf("expected processing message to fail for type %s", pb.BARE_LOOKUP)
+			t.Fatalf("expected processing message to fail for type %s", pb.FIND_CLOSEST_PEERS)
 		}
 
 	}

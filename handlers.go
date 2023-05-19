@@ -22,10 +22,10 @@ import (
 var DHTFeatures = peer.FeatureList{
 	pb.IPFS_GET_PROVIDERS,
 	pb.IPFS_GET_PROVIDERS,
-	pb.GENERIC_GET,
-	pb.GENERIC_PUT,
-	pb.PING,
-	pb.BARE_LOOKUP,
+	pb.GET_VALUE,
+	pb.PUT_VALUE,
+	pb.IPFS_PING,
+	pb.FIND_CLOSEST_PEERS,
 }
 
 // dhthandler specifies the signature of functions that handle DHT messages.
@@ -36,9 +36,9 @@ func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 	// TODO: THINK ABOUT THIS
 
 	switch t {
-	case pb.BARE_LOOKUP:
+	case pb.FIND_CLOSEST_PEERS:
 		return dht.handleFindPeer
-	case pb.PING:
+	case pb.IPFS_PING:
 		return dht.handlePing
 	}
 
@@ -53,9 +53,9 @@ func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 
 	if dht.enableValues {
 		switch t {
-		case pb.GENERIC_GET: //pb.Message_GET_VALUE:
+		case pb.GET_VALUE: //pb.Message_GET_VALUE:
 			return dht.handleGetValue
-		case pb.GENERIC_PUT: //pb.Message_PUT_VALUE:
+		case pb.PUT_VALUE: //pb.Message_PUT_VALUE:
 			return dht.handlePutValue
 		}
 	}
@@ -95,7 +95,8 @@ func (dht *IpfsDHT) handleGetValue(ctx context.Context, p peer.ID, pmes *pb.Mess
 	resp.Record = rec
 
 	// Find closest peer on given cluster to desired key and reply with that info
-	closer := dht.betterPeersToQuery(pmes, p, dht.bucketSize)
+	closer := dht.betterPeersToQuery(msg, p, dht.bucketSize)
+	// closer := dht.betterPeersToQuery(pmes, p, dht.bucketSize)
 	if len(closer) > 0 {
 		// TODO: pstore.PeerInfos should move to core (=> peerstore.AddrInfos).
 		closerinfos := pstore.PeerInfos(dht.peerstore, closer)
@@ -306,7 +307,8 @@ func (dht *IpfsDHT) handleFindPeer(ctx context.Context, from peer.ID, pmes *pb.M
 	if targetPid == dht.self {
 		closest = []peer.ID{dht.self}
 	} else {
-		closest = dht.betterPeersToQuery(pmes, from, dht.bucketSize)
+		closest = dht.betterPeersToQuery(msg, from, dht.bucketSize)
+		// closest = dht.betterPeersToQuery(pmes, from, dht.bucketSize)
 
 		// Never tell a peer about itself.
 		if targetPid != from {

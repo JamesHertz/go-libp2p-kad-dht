@@ -22,12 +22,11 @@ var logger = logging.Logger("dht")
 const (
 	IPFS_GET_PROVIDERS peer.Feature = "/ipfs/getproviders"
 	IPFS_ADD_PROVIDERS peer.Feature = "/ipfs/putproviders"
-	GENERIC_GET        peer.Feature = "/ipfs/get"
-	GENERIC_PUT        peer.Feature = "/ipfs/put"
-	PING               peer.Feature = "/ipfs/ping"
-	BARE_LOOKUP        peer.Feature = "/libp2p/barelookup"
+	IPFS_GET_VALUE     peer.Feature = "/ipfs/get"
+	IPFS_PUT_VALUE     peer.Feature = "/ipfs/put"
+	IPFS_PING          peer.Feature = "/ipfs/ping"
+	FIND_CLOSEST_PEERS peer.Feature = "/libp2p/findclosestpeer"
 )
-
 
 // ProtocolMessenger can be used for sending DHT messages to peers and processing their responses.
 // This decouples the wire protocol format from both the DHT protocol implementation and from the implementation of the
@@ -73,7 +72,7 @@ func (pm *ProtocolMessenger) PutValue(ctx context.Context, p peer.ID, rec *recpb
 	msg1.Record = rec
 	// pmes := NewMessage(Message_PUT_VALUE, rec.Key, 0)
 	// pmes.Record = rec
-	rpmes, err := pm.m.SendRequest(ctx, p, ToDhtMessage(msg1, GENERIC_PUT))
+	rpmes, err := pm.m.SendRequest(ctx, p, ToDhtMessage(msg1, IPFS_PUT_VALUE))
 
 	if err == nil {
 		msg2, err = rpmes.GetIpfsMsg()
@@ -101,7 +100,7 @@ func (pm *ProtocolMessenger) GetValue(ctx context.Context, p peer.ID, key string
 	pmes = NewIpfsMsg([]byte(key), 0)
 
 	// pmes := NewMessage(Message_GET_VALUE, []byte(key), 0)
-	aux, err := pm.m.SendRequest(ctx, p, ToDhtMessage(pmes, GENERIC_GET))
+	aux, err := pm.m.SendRequest(ctx, p, ToDhtMessage(pmes, IPFS_GET_VALUE))
 
 	if err == nil {
 		respMsg, err = aux.GetIpfsMsg()
@@ -136,7 +135,7 @@ func (pm *ProtocolMessenger) GetValue(ctx context.Context, p peer.ID, key string
 func (pm *ProtocolMessenger) GetClosestPeers(ctx context.Context, p peer.ID, id peer.ID) ([]*peer.AddrInfo, error) {
 	var pmes, respMsg *IpfsMessage
 	pmes = NewIpfsMsg([]byte(id), 0) //NewMessage(Message_FIND_NODE, []byte(id), 0)
-	aux, err := pm.m.SendRequest(ctx, p, ToDhtMessage(pmes, BARE_LOOKUP))
+	aux, err := pm.m.SendRequest(ctx, p, ToDhtMessage(pmes, FIND_CLOSEST_PEERS))
 	if err == nil {
 		respMsg, err = aux.GetIpfsMsg()
 	}
@@ -177,7 +176,7 @@ func (pm *ProtocolMessenger) GetProviders(ctx context.Context, p peer.ID, key mu
 	if err == nil {
 		respMsg, err = aux.GetIpfsMsg()
 	}
-	
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -188,12 +187,12 @@ func (pm *ProtocolMessenger) GetProviders(ctx context.Context, p peer.ID, key mu
 
 // Ping sends a ping message to the passed peer and waits for a response.
 func (pm *ProtocolMessenger) Ping(ctx context.Context, p peer.ID) error {
-	req := &Message{Feature: string(PING)} //NewMessage(Message_PING, nil, 0)
+	req := &Message{Feature: string(IPFS_PING)} //NewMessage(Message_PING, nil, 0)
 	resp, err := pm.m.SendRequest(ctx, p, req)
 	if err != nil {
 		return fmt.Errorf("sending request: %w", err)
 	}
-	if resp.GetMsgFeature() != PING {
+	if resp.GetMsgFeature() != IPFS_PING {
 		return fmt.Errorf("got unexpected response type: %v", resp.GetMsgFeature())
 	}
 	return nil
