@@ -176,6 +176,8 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 		return nil, err
 	}
 
+	h.SetFeatures(Features...) // change this later :)
+
 	dht, err := makeDHT(ctx, h, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DHT, err=%s", err)
@@ -396,7 +398,10 @@ func makeRoutingTable(dht *IpfsDHT, cfg dhtcfg.Config, maxLastSuccessfulOutbound
 		filter = df
 	}
 
-	rt, err := kb.NewRoutingTable(cfg.BucketSize, dht.selfKey, time.Minute, dht.host.Peerstore(), maxLastSuccessfulOutboundThreshold, filter)
+	rt, err := kb.NewRoutingTable(cfg.BucketSize, dht.selfKey, dht.host.GetFeatures(), dht.host.Peerstore(), 
+		time.Minute, dht.host.Peerstore(), maxLastSuccessfulOutboundThreshold, filter,
+	)
+
 	if err != nil {
 		return nil, err
 	}
