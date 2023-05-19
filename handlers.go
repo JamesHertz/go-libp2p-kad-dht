@@ -22,8 +22,8 @@ import (
 var DHTFeatures = peer.FeatureList{
 	pb.IPFS_GET_PROVIDERS,
 	pb.IPFS_GET_PROVIDERS,
-	pb.GET_VALUE,
-	pb.PUT_VALUE,
+	pb.IPFS_GET_VALUE,
+	pb.IPFS_PUT_VALUE,
 	pb.IPFS_PING,
 	pb.FIND_CLOSEST_PEERS,
 }
@@ -53,9 +53,9 @@ func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 
 	if dht.enableValues {
 		switch t {
-		case pb.GET_VALUE: //pb.Message_GET_VALUE:
+		case pb.IPFS_GET_VALUE: //pb.Message_GET_VALUE:
 			return dht.handleGetValue
-		case pb.PUT_VALUE: //pb.Message_PUT_VALUE:
+		case pb.IPFS_PUT_VALUE: //pb.Message_PUT_VALUE:
 			return dht.handlePutValue
 		}
 	}
@@ -373,7 +373,8 @@ func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.
 	resp.ProviderPeers = pb.PeerInfosToPBPeers(dht.host.Network(), providers)
 
 	// Also send closer peers.
-	closer := dht.betterPeersToQuery(pmes, p, dht.bucketSize)
+	closer := dht.betterPeersToQuery(msg, p, dht.bucketSize)
+	// closer := dht.betterPeersToQuery(pmes, p, dht.bucketSize)
 	if closer != nil {
 		// TODO: pstore.PeerInfos should move to core (=> peerstore.AddrInfos).
 		infos := pstore.PeerInfos(dht.peerstore, closer)

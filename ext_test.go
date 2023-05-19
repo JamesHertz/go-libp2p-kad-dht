@@ -187,7 +187,7 @@ func TestGetFailures(t *testing.T) {
 
 	// Now we test this DHT's handleGetValue failure
 	{
-		ftr := pb.GET_VALUE //pb.Message_GET_VALUE
+		ftr := pb.IPFS_GET_VALUE //pb.Message_GET_VALUE
 		str := "hello"
 
 		rec := record.MakePutRecord(str, []byte("blah"))
@@ -280,7 +280,7 @@ func TestNotFound(t *testing.T) {
 				}
 
 				switch pmes.GetMsgFeature() {
-				case pb.GET_VALUE:
+				case pb.IPFS_GET_VALUE:
 					ps := []peer.AddrInfo{}
 					for i := 0; i < 7; i++ {
 						p := hosts[rand.Intn(len(hosts))].ID()
@@ -401,7 +401,7 @@ func TestLessThanKResponses(t *testing.T) {
 					panic(err)
 				}
 				switch pmes.GetMsgFeature() {
-				case pb.GET_VALUE:
+				case pb.IPFS_GET_VALUE:
 					pi := host.Peerstore().PeerInfo(hosts[1].ID())
 					resp := pb.ToDhtMessage(
 						&pb.IpfsMessage{
@@ -490,7 +490,7 @@ func TestMultipleQueries(t *testing.T) {
 			}
 
 			switch pmes.GetMsgFeature() {
-			case pb.GET_VALUE:
+			case pb.IPFS_GET_VALUE:
 				pi := hosts[1].Peerstore().PeerInfo(hosts[0].ID())
 				resp := pb.ToDhtMessage(&pb.IpfsMessage{
 					CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),

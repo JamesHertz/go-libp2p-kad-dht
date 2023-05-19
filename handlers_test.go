@@ -74,8 +74,8 @@ func TestBadMessage(t *testing.T) {
 	dht := setupDHT(ctx, t, false)
 
 	features := peer.FeatureList{
-		pb.PUT_VALUE,
-		pb.GET_VALUE,
+		pb.IPFS_PUT_VALUE,
+		pb.IPFS_GET_VALUE,
 		pb.IPFS_ADD_PROVIDERS,
 		pb.IPFS_GET_PROVIDERS,
 		pb.FIND_CLOSEST_PEERS,

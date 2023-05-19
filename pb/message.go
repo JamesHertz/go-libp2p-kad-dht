@@ -17,6 +17,10 @@ type PeerRoutingInfo struct {
 	network.Connectedness
 }
 
+type QueriableMsg interface {
+	GetKey() []byte
+}
+
 // TODO: CHANGE FEATURES LIST THING :)
 
 // type marshableMsg interface {
@@ -29,7 +33,7 @@ type PeerRoutingInfo struct {
 func (msg *Message) GetIpfsMsg() (*IpfsMessage, error) {
 	res := &IpfsMessage{}
 	if err := res.Unmarshal(msg.Data); err != nil {
-		return nil, fmt.Errorf("Invalid IpfsMsg: %v")
+		return nil, fmt.Errorf("Invalid IpfsMsg: %v", err)
 	}
 	return res, nil
 }
@@ -38,9 +42,13 @@ func (msg *Message) GetBareMsg() (*Message_BareMsg, error) {
 	res := &Message_BareMsg{}
 	res.Marshal()
 	if err := res.Unmarshal(msg.Data); err != nil {
-		return nil, fmt.Errorf("Invalid BareMsg: %v")
+		return nil, fmt.Errorf("Invalid BareMsg: %v", err)
 	}
 	return res, nil
+}
+
+func(msg * Message_BareMsg) GetKey()[]byte {
+	return msg.GetPeerID()
 }
 
 func (msg *Message) GetMsgFeature() peer.Feature {

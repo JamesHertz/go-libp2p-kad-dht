@@ -42,8 +42,9 @@ message Peer {
 
 message Message {
 	message BareMsg {
-		string peerID = 1; //[(gogoproto.customtype) = "byteString", (gogoproto.nullable) = false];
-		repeated Peer closerPeer = 2 [(gogoproto.nullable) = false];;
+		// todo: look at this later :)
+		bytes peerID = 1;
+		repeated Peer closerPeer = 2 [(gogoproto.nullable) = false];
 	}
 
 	string feature = 1;

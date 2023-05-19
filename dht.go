@@ -697,13 +697,15 @@ func (dht * IpfsDHT) GetFeaturesList() peer.FeatureList{
 }
 
 // nearestPeersToQuery returns the routing tables closest peers.
-func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.IpfsMessage, count int) []peer.ID {
+// changed by now 
+// func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.IpfsMessage, count int) []peer.ID {
+func (dht *IpfsDHT) nearestPeersToQuery(pmes pb.QueriableMsg, count int) []peer.ID {
 	closer := dht.routingTable.NearestPeers(kb.ConvertKey(string(pmes.GetKey())), count)
 	return closer
 }
 
 // betterPeersToQuery returns nearestPeersToQuery with some additional filtering
-func (dht *IpfsDHT) betterPeersToQuery(pmes *pb.IpfsMessage, from peer.ID, count int) []peer.ID {
+func (dht *IpfsDHT) betterPeersToQuery(pmes pb.QueriableMsg, from peer.ID, count int) []peer.ID {
 	closer := dht.nearestPeersToQuery(pmes, count)
 
 	// no node? nil
