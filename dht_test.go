@@ -1257,7 +1257,7 @@ func TestAtomicPut(t *testing.T) {
 	key := "testkey"
 	putRecord := func(value []byte) error {
 		rec := record.MakePutRecord(key, value)
-		pmes := pb.NewMessage(pb.Message_PUT_VALUE, rec.Key, 0)
+		pmes := pb.NewMessage(pb.IPFS_PUT_VALUE, rec.Key, 0)
 		pmes.Record = rec
 		_, err := d.handlePutValue(ctx, "testpeer", pmes)
 		return err
@@ -1281,7 +1281,7 @@ func TestAtomicPut(t *testing.T) {
 	wg.Wait()
 
 	// get should return the newest value
-	pmes := pb.NewMessage(pb.Message_GET_VALUE, []byte(key), 0)
+	pmes := pb.NewMessage(pb.IPFS_GET_VALUE, []byte(key), 0)
 	msg, err := d.handleGetValue(ctx, "testkey", pmes)
 	if err != nil {
 		t.Fatalf("should not have errored on final get, but got %+v", err)

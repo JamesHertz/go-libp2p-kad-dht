@@ -4,7 +4,7 @@ GO = $(PB:.proto=.pb.go)
 all: $(GO)
 
 %.pb.go: %.proto
-		protoc --proto_path=$(GOPATH)/src:. --gogofast_out=. $<
+		protoc -I=$(GOPATH)/src:. -I=../../pb-files --gogofast_out=. $<
 
 clean:
 		rm -f *.pb.go

@@ -158,7 +158,8 @@ func TestGetFailures(t *testing.T) {
 			}
 
 			resp := &pb.Message{
-				Type: pmes.Type,
+				Feature: pmes.Feature,
+				//Type: pmes.Type,
 			}
 			_ = pbw.WriteMsg(resp)
 		})
@@ -187,12 +188,12 @@ func TestGetFailures(t *testing.T) {
 
 	// Now we test this DHT's handleGetValue failure
 	{
-		typ := pb.Message_GET_VALUE
+		typ := pb.IPFS_GET_VALUE //pb.Message_GET_VALUE
 		str := "hello"
 
 		rec := record.MakePutRecord(str, []byte("blah"))
 		req := pb.Message{
-			Type:   typ,
+			Feature: string(typ),
 			Key:    []byte(str),
 			Record: rec,
 		}
@@ -264,9 +265,9 @@ func TestNotFound(t *testing.T) {
 					return
 				}
 
-				switch pmes.GetType() {
-				case pb.Message_GET_VALUE:
-					resp := &pb.Message{Type: pmes.Type}
+				switch pmes.GetMsgFeature(){
+				case pb.IPFS_GET_VALUE:
+					resp := &pb.Message{Feature: pmes.Feature}
 
 					ps := []peer.AddrInfo{}
 					for i := 0; i < 7; i++ {
@@ -361,11 +362,11 @@ func TestLessThanKResponses(t *testing.T) {
 					panic(err)
 				}
 
-				switch pmes.GetType() {
-				case pb.Message_GET_VALUE:
+				switch pmes.GetMsgFeature() {
+				case pb.IPFS_GET_VALUE:
 					pi := host.Peerstore().PeerInfo(hosts[1].ID())
 					resp := &pb.Message{
-						Type:        pmes.Type,
+						Feature: pmes.Feature,
 						CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),
 					}
 
@@ -431,11 +432,11 @@ func TestMultipleQueries(t *testing.T) {
 				panic(err)
 			}
 
-			switch pmes.GetType() {
-			case pb.Message_GET_VALUE:
+			switch pmes.GetMsgFeature(){
+			case pb.IPFS_GET_VALUE:
 				pi := hosts[1].Peerstore().PeerInfo(hosts[0].ID())
 				resp := &pb.Message{
-					Type:        pmes.Type,
+					Feature: pmes.Feature,
 					CloserPeers: pb.PeerInfosToPBPeers(d.host.Network(), []peer.AddrInfo{pi}),
 				}
 

@@ -17,6 +17,17 @@ import (
 
 var logger = logging.Logger("dht")
 
+
+// features (at least by now c:)
+const (
+	IPFS_GET_PROVIDERS peer.Feature = "/ipfs/getproviders"
+	IPFS_ADD_PROVIDERS peer.Feature = "/ipfs/putproviders"
+	IPFS_GET_VALUE     peer.Feature = "/ipfs/get"
+	IPFS_PUT_VALUE     peer.Feature = "/ipfs/put"
+	IPFS_PING          peer.Feature = "/ipfs/ping"
+	FIND_CLOSEST_PEERS peer.Feature = "/libp2p/findclosestpeer"
+)
+
 // ProtocolMessenger can be used for sending DHT messages to peers and processing their responses.
 // This decouples the wire protocol format from both the DHT protocol implementation and from the implementation of the
 // routing.Routing interface.
@@ -55,7 +66,7 @@ type MessageSender interface {
 
 // PutValue asks a peer to store the given key/value pair.
 func (pm *ProtocolMessenger) PutValue(ctx context.Context, p peer.ID, rec *recpb.Record) error {
-	pmes := NewMessage(Message_PUT_VALUE, rec.Key, 0)
+	pmes := NewMessage(IPFS_PUT_VALUE, rec.Key, 0)
 	pmes.Record = rec
 	rpmes, err := pm.m.SendRequest(ctx, p, pmes)
 	if err != nil {
@@ -75,7 +86,7 @@ func (pm *ProtocolMessenger) PutValue(ctx context.Context, p peer.ID, rec *recpb
 // GetValue asks a peer for the value corresponding to the given key. Also returns the K closest peers to the key
 // as described in GetClosestPeers.
 func (pm *ProtocolMessenger) GetValue(ctx context.Context, p peer.ID, key string) (*recpb.Record, []*peer.AddrInfo, error) {
-	pmes := NewMessage(Message_GET_VALUE, []byte(key), 0)
+	pmes := NewMessage(IPFS_GET_VALUE, []byte(key), 0)
 	respMsg, err := pm.m.SendRequest(ctx, p, pmes)
 	if err != nil {
 		return nil, nil, err
@@ -104,7 +115,7 @@ func (pm *ProtocolMessenger) GetValue(ctx context.Context, p peer.ID, key string
 // Note: If the peer happens to know another peer whose peerID exactly matches the given id it will return that peer
 // even if that peer is not a DHT server node.
 func (pm *ProtocolMessenger) GetClosestPeers(ctx context.Context, p peer.ID, id peer.ID) ([]*peer.AddrInfo, error) {
-	pmes := NewMessage(Message_FIND_NODE, []byte(id), 0)
+	pmes := NewMessage(FIND_CLOSEST_PEERS, []byte(id), 0)
 	respMsg, err := pm.m.SendRequest(ctx, p, pmes)
 	if err != nil {
 		return nil, err
@@ -126,7 +137,7 @@ func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key mul
 		return fmt.Errorf("no known addresses for self, cannot put provider")
 	}
 
-	pmes := NewMessage(Message_ADD_PROVIDER, key, 0)
+	pmes := NewMessage(IPFS_ADD_PROVIDERS, key, 0)
 	pmes.ProviderPeers = RawPeerInfosToPBPeers([]peer.AddrInfo{pi})
 
 	return pm.m.SendMessage(ctx, p, pmes)
@@ -135,7 +146,7 @@ func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key mul
 // GetProviders asks a peer for the providers it knows of for a given key. Also returns the K closest peers to the key
 // as described in GetClosestPeers.
 func (pm *ProtocolMessenger) GetProviders(ctx context.Context, p peer.ID, key multihash.Multihash) ([]*peer.AddrInfo, []*peer.AddrInfo, error) {
-	pmes := NewMessage(Message_GET_PROVIDERS, key, 0)
+	pmes := NewMessage(IPFS_GET_PROVIDERS, key, 0)
 	respMsg, err := pm.m.SendRequest(ctx, p, pmes)
 	if err != nil {
 		return nil, nil, err
@@ -147,13 +158,13 @@ func (pm *ProtocolMessenger) GetProviders(ctx context.Context, p peer.ID, key mu
 
 // Ping sends a ping message to the passed peer and waits for a response.
 func (pm *ProtocolMessenger) Ping(ctx context.Context, p peer.ID) error {
-	req := NewMessage(Message_PING, nil, 0)
+	req := NewMessage(IPFS_PING, nil, 0)
 	resp, err := pm.m.SendRequest(ctx, p, req)
 	if err != nil {
 		return fmt.Errorf("sending request: %w", err)
 	}
-	if resp.Type != Message_PING {
-		return fmt.Errorf("got unexpected response type: %v", resp.Type)
+	if resp.Feature!= string(IPFS_PING){
+		return fmt.Errorf("got unexpected response type: %v", resp.Feature)
 	}
 	return nil
 }

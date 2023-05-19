@@ -15,10 +15,14 @@ type PeerRoutingInfo struct {
 	network.Connectedness
 }
 
+func (msg Message) GetMsgFeature() peer.Feature{
+	return peer.Feature(msg.Feature)
+}
+
 // NewMessage constructs a new dht message with given type, key, and level
-func NewMessage(typ Message_MessageType, key []byte, level int) *Message {
+func NewMessage(feture peer.Feature, key []byte, level int) *Message {
 	m := &Message{
-		Type: typ,
+		Feature: string(feture),
 		Key:  key,
 	}
 	m.SetClusterLevel(level)

@@ -40,6 +40,7 @@ import (
 
 	record "github.com/libp2p/go-libp2p-record"
 	recpb "github.com/libp2p/go-libp2p-record/pb"
+	pb "github.com/libp2p/go-libp2p-kad-dht/pb"
 
 	"github.com/libp2p/go-libp2p-xor/kademlia"
 	kadkey "github.com/libp2p/go-libp2p-xor/key"
@@ -940,7 +941,7 @@ func (dht *FullRT) ProvideMany(ctx context.Context, keys []multihash.Multihash) 
 	}
 
 	fn := func(ctx context.Context, p, k peer.ID) error {
-		pmes := dht_pb.NewMessage(dht_pb.Message_ADD_PROVIDER, multihash.Multihash(k), 0)
+		pmes := dht_pb.NewMessage(pb.IPFS_ADD_PROVIDERS, multihash.Multihash(k), 0)
 		pmes.ProviderPeers = pbPeers
 
 		return dht.messageSender.SendMessage(ctx, p, pmes)

@@ -22,28 +22,28 @@ import (
 // dhthandler specifies the signature of functions that handle DHT messages.
 type dhtHandler func(context.Context, peer.ID, *pb.Message) (*pb.Message, error)
 
-func (dht *IpfsDHT) handlerForMsgType(t pb.Message_MessageType) dhtHandler {
+func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 	switch t {
-	case pb.Message_FIND_NODE:
+	case pb.FIND_CLOSEST_PEERS:
 		return dht.handleFindPeer
-	case pb.Message_PING:
+	case pb.IPFS_PING:
 		return dht.handlePing
 	}
 
 	if dht.enableValues {
 		switch t {
-		case pb.Message_GET_VALUE:
+		case pb.IPFS_GET_VALUE:
 			return dht.handleGetValue
-		case pb.Message_PUT_VALUE:
+		case pb.IPFS_PUT_VALUE:
 			return dht.handlePutValue
 		}
 	}
 
 	if dht.enableProviders {
 		switch t {
-		case pb.Message_ADD_PROVIDER:
+		case pb.IPFS_ADD_PROVIDERS:
 			return dht.handleAddProvider
-		case pb.Message_GET_PROVIDERS:
+		case pb.IPFS_GET_PROVIDERS:
 			return dht.handleGetProviders
 		}
 	}
@@ -59,7 +59,7 @@ func (dht *IpfsDHT) handleGetValue(ctx context.Context, p peer.ID, pmes *pb.Mess
 	}
 
 	// setup response
-	resp := pb.NewMessage(pmes.GetType(), pmes.GetKey(), pmes.GetClusterLevel())
+	resp := pb.NewMessage(pmes.GetMsgFeature(), pmes.GetKey(), pmes.GetClusterLevel())
 
 	rec, err := dht.checkLocalDatastore(ctx, k)
 	if err != nil {
@@ -253,7 +253,7 @@ func (dht *IpfsDHT) handlePing(_ context.Context, p peer.ID, pmes *pb.Message) (
 }
 
 func (dht *IpfsDHT) handleFindPeer(ctx context.Context, from peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
-	resp := pb.NewMessage(pmes.GetType(), nil, pmes.GetClusterLevel())
+	resp := pb.NewMessage(pmes.GetMsgFeature(), nil, pmes.GetClusterLevel())
 	var closest []peer.ID
 
 	if len(pmes.GetKey()) == 0 {
@@ -314,7 +314,7 @@ func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.
 		return nil, fmt.Errorf("handleGetProviders key is empty")
 	}
 
-	resp := pb.NewMessage(pmes.GetType(), pmes.GetKey(), pmes.GetClusterLevel())
+	resp := pb.NewMessage(pmes.GetMsgFeature(), pmes.GetKey(), pmes.GetClusterLevel())
 
 	// setup providers
 	providers, err := dht.providerStore.GetProviders(ctx, key)

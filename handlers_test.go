@@ -73,17 +73,19 @@ func TestBadMessage(t *testing.T) {
 
 	dht := setupDHT(ctx, t, false)
 
-	for _, typ := range []pb.Message_MessageType{
-		pb.Message_PUT_VALUE, pb.Message_GET_VALUE, pb.Message_ADD_PROVIDER,
-		pb.Message_GET_PROVIDERS, pb.Message_FIND_NODE,
-	} {
+	features := []peer.Feature{
+		pb.IPFS_PUT_VALUE, pb.IPFS_GET_VALUE,
+		pb.IPFS_ADD_PROVIDERS, pb.IPFS_GET_PROVIDERS,
+		pb.FIND_CLOSEST_PEERS,
+	}
+
+	for _, ft := range features {
 		msg := &pb.Message{
-			Type: typ,
-			// explicitly avoid the key.
+			Feature: string(ft),
 		}
-		_, err := dht.handlerForMsgType(typ)(ctx, dht.Host().ID(), msg)
+		_, err := dht.handlerForMsgType(ft)(ctx, dht.Host().ID(), msg)
 		if err == nil {
-			t.Fatalf("expected processing message to fail for type %s", pb.Message_FIND_NODE)
+			t.Fatalf("expected processing message to fail for type %s", pb.FIND_CLOSEST_PEERS) //Message_FIND_NODE)
 		}
 	}
 }
