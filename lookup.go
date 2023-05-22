@@ -11,17 +11,6 @@ import (
 	kb "github.com/libp2p/go-libp2p-kbucket"
 )
 
-
-func (dht * IpfsDHT) GetClosestPeerWithFeature(ctx context.Context, key string, ft peer.Feature) ([]peer.ID, error){
-	return dht.GetClosestPeersWithFilter(
-		ctx, key, func() bool{ return true },
-	)
-}
-
-func (dht * IpfsDHT) GetClosestPeersWithFilter(ctx context.Context, key string, filter func() bool) ([]peer.ID, error) {
-	return nil, nil
-}
-
 // GetClosestPeers is a Kademlia 'node lookup' operation. Returns a channel of
 // the K closest peers to the given key.
 //
