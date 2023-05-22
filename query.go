@@ -63,7 +63,7 @@ type query struct {
 type lookupWithFollowupResult struct {
 	peers []peer.ID            // the top K not unreachable peers at the end of the query
 	state []qpeerset.PeerState // the peer states at the end of the query
-	// features []peer.FeatureList
+	features []peer.FeatureList
 
 	// indicates that neither the lookup nor the followup has been prematurely terminated by an external condition such
 	// as context cancellation or the stop function being called.
@@ -210,6 +210,11 @@ func (q *query) recordValuablePeers() {
 
 // constructLookupResult takes the query information and uses it to construct the lookup result
 func (q *query) constructLookupResult(target kb.ID) *lookupWithFollowupResult {
+    type resultInfo struct {
+    	state qpeerset.PeerState
+    	features peer.FeatureList
+    } 
+
 	// determine if the query terminated early
 	completed := true
 
@@ -222,11 +227,17 @@ func (q *query) constructLookupResult(target kb.ID) *lookupWithFollowupResult {
 
 	// extract the top K not unreachable peers
 	var peers []peer.ID
-	peerState := make(map[peer.ID]qpeerset.PeerState)
-	qp := q.queryPeers.GetClosestNInStates(q.dht.bucketSize, qpeerset.PeerHeard, qpeerset.PeerWaiting, qpeerset.PeerQueried)
+	// peerState := make(map[peer.ID]qpeerset.PeerState)
+	peerInfos := make(map[peer.ID]resultInfo)
+	
+
+	qp := q.queryPeers.GetClosestNInStates(q.dht.bucketSize, qpeerset.PeerHeard, qpeerset.PeerWaiting, qpeerset.PeerQueried) // over here
 	for _, p := range qp {
-		state := q.queryPeers.GetState(p)
-		peerState[p] = state
+		peerInfos[p] = resultInfo{
+		    state: q.queryPeers.GetState(p),
+		    features:  q.queryPeers.GetFeatures(p),
+		}
+		// peerState[p] = state
 		peers = append(peers, p)
 	}
 
@@ -240,11 +251,13 @@ func (q *query) constructLookupResult(target kb.ID) *lookupWithFollowupResult {
 	res := &lookupWithFollowupResult{
 		peers:     sortedPeers,
 		state:     make([]qpeerset.PeerState, len(sortedPeers)),
+		features:  make([]peer.FeatureList, len(sortedPeers)),
 		completed: completed,
 	}
 
 	for i, p := range sortedPeers {
-		res.state[i] = peerState[p]
+		res.state[i]    = peerInfos[p].state
+		res.features[i] = peerInfos[p].features
 	}
 
 	return res
@@ -255,6 +268,7 @@ type queryUpdate struct {
 	queried     []peer.ID
 	heard       []peer.ID
 	unreachable []peer.ID
+	heardFts    []peer.FeatureList // features of heard peers :)
 
 	queryDuration time.Duration
 }
@@ -265,8 +279,14 @@ func (q *query) run() {
 
 	alpha := q.dht.alpha
 
+	seedsFts  := make([]peer.FeatureList, len(q.seedPeers))
+	for i, pi := range pstore.AddrInfos(q.dht.peerstore, q.seedPeers) {
+		seedsFts[i] = pi.Features
+	}
+
 	ch := make(chan *queryUpdate, alpha)
-	ch <- &queryUpdate{cause: q.dht.self, heard: q.seedPeers}
+	ch <- &queryUpdate{cause: q.dht.self, heard: q.seedPeers, heardFts: seedsFts}
+
 
 	// return only once all outstanding queries have completed.
 	defer q.waitGroup.Wait()
@@ -422,6 +442,7 @@ func (q *query) queryPeer(ctx context.Context, ch chan<- *queryUpdate, p peer.ID
 
 	// process new peers
 	saw := []peer.ID{}
+	fts := []peer.FeatureList{}
 	for _, next := range newPeers {
 		if next.ID == q.dht.self { // don't add self.
 			logger.Debugf("PEERS CLOSER -- worker for: %v found self", p)
@@ -440,10 +461,11 @@ func (q *query) queryPeer(ctx context.Context, ch chan<- *queryUpdate, p peer.ID
 		if isTarget || q.dht.queryPeerFilter(q.dht, *next) {
 			q.dht.maybeAddAddrs(next.ID, next.Addrs, pstore.TempAddrTTL)
 			saw = append(saw, next.ID)
+			fts = append(fts, next.Features)
 		}
 	}
 
-	ch <- &queryUpdate{cause: p, heard: saw, queried: []peer.ID{p}, queryDuration: queryDuration}
+	ch <- &queryUpdate{cause: p, heard: saw, heardFts: fts, queried: []peer.ID{p}, queryDuration: queryDuration}
 }
 
 func (q *query) updateState(ctx context.Context, up *queryUpdate) {
@@ -467,11 +489,11 @@ func (q *query) updateState(ctx context.Context, up *queryUpdate) {
 			nil,
 		),
 	)
-	for _, p := range up.heard {
+	for i, p := range up.heard {
 		if p == q.dht.self { // don't add self.
 			continue
 		}
-		q.queryPeers.TryAdd(p, up.cause)
+		q.queryPeers.TryAddPeer(p, up.cause, up.heardFts[i])
 	}
 	for _, p := range up.queried {
 		if p == q.dht.self { // don't add self.
