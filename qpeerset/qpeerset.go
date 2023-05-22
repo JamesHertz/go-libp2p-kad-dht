@@ -29,7 +29,7 @@ type QueryPeerset struct {
 	key ks.Key
 
 	// all known peers
-	all []queryPeerState
+	all []queryPeerState // sorted in acending order of their distance
 
 	// sorted is true if all is currently in sorted order
 	sorted bool

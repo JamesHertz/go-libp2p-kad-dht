@@ -141,3 +141,28 @@ func BenchmarkHandleFindPeer(b *testing.B) {
 	}
 
 }
+
+func TestPropagateFeatures(t *testing.T) {
+	/*
+	ctx := context.Background()
+	dhts := setupDHTS(t, ctx, 10)
+
+	for i := 0; i < len(dhts) - 1; i++ {
+		connect(t, ctx, dhts[0], dhts[i+1])
+	}
+
+	from := dhts[1].host.ID()
+	for _, dht := range dhts[2:] {
+		targetID := dht.host.ID()
+		res, err := dhts[0].handleFindPeer(ctx, from, &pb.Message{ 
+			Feature: string(pb.FIND_CLOSEST_PEERS),
+			Key: []byte(targetID),
+		})
+		require.Nil(t, err)
+
+		for _, p := range res.CloserPeers {
+			require.True(t, len(p.Features) > 0, "features not set for: %s", targetID)
+		}
+	}
+	*/
+}

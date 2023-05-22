@@ -176,7 +176,7 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 		return nil, err
 	}
 
-	h.SetFeatures(Features...) // change this later :)
+	h.SetFeatures(Features...) //  TODO: take into consideration enbleProviders and enableValues
 
 	dht, err := makeDHT(ctx, h, cfg)
 	if err != nil {

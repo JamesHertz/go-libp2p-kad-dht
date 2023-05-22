@@ -63,6 +63,7 @@ type query struct {
 type lookupWithFollowupResult struct {
 	peers []peer.ID            // the top K not unreachable peers at the end of the query
 	state []qpeerset.PeerState // the peer states at the end of the query
+	// features []peer.FeatureList
 
 	// indicates that neither the lookup nor the followup has been prematurely terminated by an external condition such
 	// as context cancellation or the stop function being called.
@@ -148,7 +149,7 @@ processFollowUp:
 func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn, stopFn stopFn) (*lookupWithFollowupResult, error) {
 	// pick the K closest peers to the key in our Routing table.
 	targetKadID := kb.ConvertKey(target)
-	seedPeers := dht.routingTable.NearestPeers(targetKadID, dht.bucketSize)
+	seedPeers := dht.routingTable.NearestPeers(targetKadID, dht.bucketSize) // TODO: think about this ...
 	if len(seedPeers) == 0 {
 		routing.PublishQueryEvent(ctx, &routing.QueryEvent{
 			Type:  routing.QueryError,
@@ -273,7 +274,7 @@ func (q *query) run() {
 		var cause peer.ID
 		select {
 		case update := <-ch:
-			q.updateState(pathCtx, update)
+			q.updateState(pathCtx, update) // over here
 			cause = update.cause
 		case <-pathCtx.Done():
 			q.terminate(pathCtx, cancelPath, LookupCancelled)

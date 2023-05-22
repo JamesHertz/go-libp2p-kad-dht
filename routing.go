@@ -407,7 +407,7 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 	}
 
 	var exceededDeadline bool
-	peers, err := dht.GetClosestPeers(closerCtx, string(keyMH))
+	peers, err := dht.GetClosestPeers(closerCtx, string(keyMH)) // TODO: change over here
 	switch err {
 	case context.DeadlineExceeded:
 		// If the _inner_ deadline has been exceeded but the _outer_

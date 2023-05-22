@@ -2131,3 +2131,14 @@ func TestPreconnectedNodes(t *testing.T) {
 	require.Equal(t, len(peers), 1, "why is there more than one peer?")
 	require.Equal(t, h1.ID(), peers[0], "could not find peer")
 }
+
+
+func TestFeaturesProperlySet(t *testing.T) {
+	dht := setupDHT(context.Background(), t, false)
+
+	fts := dht.host.GetFeatures()
+
+	for _, ft := range Features{
+		require.True(t, fts.HasFeature(ft))
+	}
+}
