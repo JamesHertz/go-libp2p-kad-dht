@@ -243,6 +243,9 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 
 	dht.proc.Go(dht.populatePeers)
 
+	fmt.Println("Running my DHT")
+	fmt.Printf("dht.features      => %v\n", dht.features.Features())
+	fmt.Printf("dht.host.features => %v\n", dht.host.GetFeatures())
 	return dht, nil
 }
 

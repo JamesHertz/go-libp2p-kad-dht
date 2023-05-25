@@ -24,6 +24,7 @@ type dhtHandler func(context.Context, peer.ID, *pb.Message) (*pb.Message, error)
 
 func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 
+	fmt.Printf("+new_connection to handle: %s\n", t)
 	if dht.features.HasFeature(t){
 		switch t {
 		case pb.FIND_CLOSEST_PEERS:
