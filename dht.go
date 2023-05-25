@@ -41,9 +41,13 @@ import (
 var (
 	logger     = logging.Logger("dht")
 	baseLogger = logger.Desugar()
+	mylogger   = logging.Logger("new-dht")
 
 	rtFreezeTimeout = 1 * time.Minute
 )
+func init(){
+	logging.SetLogLevel("new-dht", "INFO")
+}
 
 const (
 	// BaseConnMgrScore is the base of the score set on the connection
@@ -243,9 +247,9 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 
 	dht.proc.Go(dht.populatePeers)
 
-	fmt.Println("Running my DHT")
-	fmt.Printf("dht.features      => %v\n", dht.features.Features())
-	fmt.Printf("dht.host.features => %v\n", dht.host.GetFeatures())
+	mylogger.Info("Running my DHT")
+	mylogger.Info("dht.features      => %v\n", dht.features.Features())
+	mylogger.Info("dht.host.features => %v\n", dht.host.GetFeatures())
 	return dht, nil
 }
 
