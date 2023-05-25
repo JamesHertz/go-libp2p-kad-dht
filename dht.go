@@ -147,6 +147,8 @@ type IpfsDHT struct {
 
 	// configuration variables for tests
 	testAddressUpdateProcessing bool
+
+	features peer.FeatureSet
 }
 
 // Assert that IPFS assumptions about interfaces aren't broken. These aren't a
@@ -176,7 +178,7 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 		return nil, err
 	}
 
-	h.SetFeatures(Features...) //  TODO: take into consideration enbleProviders and enableValues
+	// h.SetFeatures(Features...) //  TODO: take into consideration enbleProviders and enableValues
 
 	dht, err := makeDHT(ctx, h, cfg)
 	if err != nil {
@@ -275,6 +277,14 @@ func makeDHT(ctx context.Context, h host.Host, cfg dhtcfg.Config) (*IpfsDHT, err
 		v1proto = cfg.V1ProtocolOverride
 	}
 
+	supportedFts := peer.Features{pb.FIND_CLOSEST_PEERS, pb.IPFS_PING}
+	if cfg.EnableProviders {
+		supportedFts = append(supportedFts, pb.IPFS_GET_PROVIDERS, pb.IPFS_ADD_PROVIDERS)
+	}
+	if cfg.EnableValues {
+		supportedFts = append(supportedFts, pb.IPFS_GET_VALUE, pb.IPFS_PUT_VALUE)
+	}
+
 	protocols = []protocol.ID{v1proto}
 	serverProtocols = []protocol.ID{v1proto}
 
@@ -298,7 +308,9 @@ func makeDHT(ctx context.Context, h host.Host, cfg dhtcfg.Config) (*IpfsDHT, err
 
 		addPeerToRTChan:   make(chan addPeerRTReq),
 		refreshFinishedCh: make(chan struct{}),
+		features:          peer.NewFeatureSet(supportedFts...),
 	}
+	dht.host.SetFeatures(supportedFts...) // set features :)
 
 	var maxLastSuccessfulOutboundThreshold time.Duration
 
@@ -398,7 +410,7 @@ func makeRoutingTable(dht *IpfsDHT, cfg dhtcfg.Config, maxLastSuccessfulOutbound
 		filter = df
 	}
 
-	rt, err := kb.NewRoutingTable(cfg.BucketSize, dht.selfKey, dht.host.GetFeatures(), dht.host.Peerstore(), 
+	rt, err := kb.NewRoutingTable(cfg.BucketSize, dht.selfKey, dht.features, dht.host.Peerstore(),
 		time.Minute, dht.host.Peerstore(), maxLastSuccessfulOutboundThreshold, filter,
 	)
 

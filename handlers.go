@@ -23,31 +23,23 @@ import (
 type dhtHandler func(context.Context, peer.ID, *pb.Message) (*pb.Message, error)
 
 func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
-	switch t {
-	case pb.FIND_CLOSEST_PEERS:
-		return dht.handleFindPeer
-	case pb.IPFS_PING:
-		return dht.handlePing
-	}
 
-	if dht.enableValues {
+	if dht.features.HasFeature(t){
 		switch t {
+		case pb.FIND_CLOSEST_PEERS:
+			return dht.handleFindPeer
+		case pb.IPFS_PING:
+			return dht.handlePing
 		case pb.IPFS_GET_VALUE:
 			return dht.handleGetValue
 		case pb.IPFS_PUT_VALUE:
 			return dht.handlePutValue
-		}
-	}
-
-	if dht.enableProviders {
-		switch t {
 		case pb.IPFS_ADD_PROVIDERS:
 			return dht.handleAddProvider
 		case pb.IPFS_GET_PROVIDERS:
 			return dht.handleGetProviders
 		}
 	}
-
 	return nil
 }
 

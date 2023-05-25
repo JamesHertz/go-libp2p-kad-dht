@@ -125,4 +125,5 @@ require (
 // replace github.com/libp2p/go-libp2p v0.25.1 => github.com/JamesHertz/go-libp2p v0.27.0-jhertz
 replace github.com/libp2p/go-libp2p => ../go-libp2p
 
-replace github.com/libp2p/go-libp2p-kbucket v0.5.0 => github.com/JamesHertz/go-libp2p-kbucket v0.5.1-research
+// replace github.com/libp2p/go-libp2p-kbucket v0.5.0 => github.com/JamesHertz/go-libp2p-kbucket v0.5.1-research
+replace github.com/libp2p/go-libp2p-kbucket => ../go-libp2p-kbucket

@@ -49,7 +49,7 @@ func peerInfoToPBPeer(p peer.AddrInfo) Message_Peer {
 		pbp.Addrs[i] = maddr.Bytes() // Bytes, not String. Compressed.
 	}
 	pbp.Id = byteString(p.ID)
-	pbp.Features = p.Features.StringArray()
+	pbp.Features = p.Features.ToStrArray()
 	return pbp
 }
 
@@ -58,7 +58,7 @@ func PBPeerToPeerInfo(pbp Message_Peer) peer.AddrInfo {
 	return peer.AddrInfo{
 		ID:    peer.ID(pbp.Id),
 		Addrs: pbp.Addresses(),
-		Features: peer.StringToFeatureList(pbp.Features),
+		Features: peer.ToFeatures(pbp.Features),
 	}
 }
 

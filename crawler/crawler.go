@@ -225,7 +225,7 @@ type queryResult struct {
 
 func (c *DefaultCrawler) queryPeer(ctx context.Context, nextPeer peer.ID) *queryResult {
 	// TODO: think about this
-	tmpRT, err := kbucket.NewRoutingTable(20, kbucket.ConvertPeerID(nextPeer), nil, nil, time.Hour, c.host.Peerstore(), time.Hour, nil)
+	tmpRT, err := kbucket.NewRoutingTable(20, kbucket.ConvertPeerID(nextPeer), peer.NewFeatureSet(), nil, time.Hour, c.host.Peerstore(), time.Hour, nil)
 	if err != nil {
 		logger.Errorf("error creating rt for peer %v : %v", nextPeer, err)
 		return &queryResult{nextPeer, nil, err}
