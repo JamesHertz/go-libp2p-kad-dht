@@ -24,6 +24,13 @@ import (
 	enc "github.com/libp2p/go-libp2p-kad-dht/internal/encrypt"
 )
 
+// +added
+const (
+	keySize               = 32
+	encryptedPeerIDLength = 66
+)
+// +added
+
 // This file implements the Routing interface for the IpfsDHT struct.
 
 // Basic Put/Get
@@ -429,7 +436,7 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 
 	var exceededDeadline bool
 // peers, err := dht.GetClosestPeers(closerCtx, string(keyMH)) - removed
-	peers, err := dht.GetClosestPeers(closerCtx, string(mhHash[:]))
+	peers, err := dht.GetClosestPeers(closerCtx, string(mhHash[:])) // +added
 	switch err {
 	case context.DeadlineExceeded:
 		// If the _inner_ deadline has been exceeded but the _outer_
@@ -527,11 +534,11 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 // +added
 
 	psLock := &sync.Mutex{}
-	// psTryAdd := func(p peer.AddrInfo) bool { - removed
+// psTryAdd := func(p peer.AddrInfo) bool { - removed
 	psTryAdd := func(p peer.ID) bool { // +add
 		psLock.Lock()
 		defer psLock.Unlock()
-/*
+/* -removed
 	pi, ok := ps[p.ID]
 	if (!ok || ((len(pi.Addrs) == 0) && len(p.Addrs) > 0)) && (len(ps) < count || findAll) {
 		ps[p.ID] = p
@@ -558,28 +565,33 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 		return
 	}
 
+	decKey := enc.MultihashToKey(key) // +added
 	for _, p := range provs {
+//+added
 		logger.Infof("got provider from local store: %x", p)
 		// decrypt peer record if needed
 		if len(p) == encryptedPeerIDLength {
-			ptPeer, err := decryptAES([]byte(p), decKey)
+			ptPeer, err := enc.DecryptAES([]byte(p), decKey)
 			if err != nil {
 				logger.Errorf("failed to decrypt encrypted peer ID: %s", err)
 				// TODO: remove from provider store, since it's a bad record
 				continue
 			}
 			p = peer.ID(ptPeer)
+//+added
 		}
 
 
 
 		// NOTE: Assuming that this list of peers is unique
 		if psTryAdd(p) {
-			select {
-			case peerOut <- p:
-			case <-ctx.Done():
-				return
-			}
+			addrInfo := dht.peerstore.PeerInfo(p) //+added
+ 			select {
+			// case peerOut <- p:  //-removed
+			case peerOut <- addrInfo: //+added
+ 			case <-ctx.Done():
+ 				return
+ 			}
 		}
 
 		// If we have enough peers locally, don't bother with remote RPC
@@ -589,27 +601,63 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 		}
 	}
 
-	lookupRes, err := dht.runLookupWithFollowup(ctx, string(key),
+	// lookupRes, err := dht.runLookupWithFollowup(ctx, string(key), // -removed
+// +added
+	// note: extra bits are added b/c of the multihash code + digest length
+	lookupKey := internal.PrefixByBits(mhHash, prefixLength+extraBitLength)
+
+	runLookupWithFollowupCalls := 0
+	lookupRes, err := dht.runLookupWithFollowup(ctx, string(mhHash), // +added
 		func(ctx context.Context, p peer.ID) ([]*peer.AddrInfo, error) {
+			runLookupWithFollowupCalls++
 			// For DHT query command
 			routing.PublishQueryEvent(ctx, &routing.QueryEvent{
 				Type: routing.SendingQuery,
 				ID:   p,
 			})
 
-			provs, closest, err := dht.protoMessenger.GetProviders(ctx, p, key)
+			// provs, closest, err := dht.protoMessenger.GetProviders(ctx, p, key) // -removed
+
+//+added
+			var (
+					provs  []*peer.AddrInfo
+					closer []*peer.AddrInfo
+					err    error
+			)
+			if prefixLength == 0 {
+				provs, closer, err = dht.protoMessenger.GetProviders(ctx, p, mhHash)
+			} else {
+				provs, closer, err = dht.protoMessenger.GetProvidersByPrefix(ctx, p, lookupKey, mhHash) //, prefixLength+extraBitLength) (look at this)
+			}
+//+added
 			if err != nil {
 				return nil, err
 			}
 
-			logger.Debugf("%d provider entries", len(provs))
+			// logger.Debugf("%d provider entries", len(provs)) // -removed
+			logger.Debugf("found %d keys with prefix", len(provs))
 
 			// Add unique providers from request, up to 'count'
 			for _, prov := range provs {
+//+added
+				// decrypt peer record if needed
+				if len(prov.ID) == encryptedPeerIDLength {
+					ptPeer, err := enc.DecryptAES([]byte(prov.ID), decKey)
+					if err != nil {
+						logger.Errorf("failed to decrypt encrypted peer ID: %s", err)
+						continue
+					}
+					prov.ID = peer.ID(ptPeer)
+				}
+//+added
+	
 				dht.maybeAddAddrs(prov.ID, prov.Addrs, peerstore.TempAddrTTL)
 				logger.Debugf("got provider: %s", prov)
+/* -removed
 				if psTryAdd(*prov) {
 					logger.Debugf("using provider: %s", prov)
+*/
+				if psTryAdd(prov.ID) {
 					select {
 					case peerOut <- *prov:
 					case <-ctx.Done():
@@ -618,21 +666,24 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 					}
 				}
 				if !findAll && psSize() >= count {
-					logger.Debugf("got enough providers (%d/%d)", psSize(), count)
+					// logger.Debugf("got enough providers (%d/%d)", psSize(), count) // -removed
 					return nil, nil
 				}
 			}
 
 			// Give closer peers back to the query to be queried
-			logger.Debugf("got closer peers: %d %s", len(closest), closest)
+			// logger.Debugf("got closer peers: %d %s", len(closest), closest) // -removed
+			logger.Debugf("got closer peers: %d %s", len(closer), closer)
 
 			routing.PublishQueryEvent(ctx, &routing.QueryEvent{
 				Type:      routing.PeerResponse,
 				ID:        p,
-				Responses: closest,
+				// Responses: closest,
+				Responses: closer,
 			})
 
-			return closest, nil
+			// return closest, nil // -removed
+			return closer, nil //+added
 		},
 		func() bool {
 			return !findAll && psSize() >= count

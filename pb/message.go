@@ -264,3 +264,15 @@ func PBPeersWithKeyToAddrInfos(pbm []Message_PeerWithKey, key []byte) []*peer.Ad
 
 	return res
 }
+
+func PeersToPeersWithKey(in []Message_Peer) []Message_PeerWithKey {
+	pbpeers := make([]Message_PeerWithKey, len(in))
+	for i, p := range in {
+		pbpeers[i] = Message_PeerWithKey{
+			Id:         p.Id,
+			Addrs:      p.Addrs,
+			Connection: p.Connection,
+		}
+	}
+	return pbpeers
+}

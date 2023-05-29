@@ -12,6 +12,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multihash"
 
+	"github.com/libp2p/go-libp2p/core/crypto"
+
 	"github.com/libp2p/go-libp2p-kad-dht/internal"
 )
 
@@ -130,11 +132,21 @@ func (pm *ProtocolMessenger) GetClosestPeers(ctx context.Context, p peer.ID, id 
 }
 
 // PutProvider asks a peer to store that we are a provider for the given key.
-func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key multihash.Multihash, host host.Host) error {
+// func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key multihash.Multihash, host host.Host) error { -removed
+func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key multihash.Multihash, host host.Host, encID []byte) error {
+// +added
+	pi := peer.AddrInfo{
+   		ID:    peer.ID(encID),
+		Addrs: host.Addrs(),
+	}	
+// +added
+
+/* -removed
 	pi := peer.AddrInfo{
 		ID:    host.ID(),
 		Addrs: host.Addrs(),
 	}
+*/
 
 	// TODO: We may want to limit the type of addresses in our provider records
 	// For example, in a WAN-only DHT prohibit sharing non-WAN addresses (e.g. 192.168.0.100)
@@ -142,15 +154,56 @@ func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key mul
 		return fmt.Errorf("no known addresses for self, cannot put provider")
 	}
 
+/* -removed
 	pmes := NewMessage(IPFS_ADD_PROVIDERS, key, 0)
 	pmes.ProviderPeers = RawPeerInfosToPBPeers([]peer.AddrInfo{pi})
+*/
+
+// +added
+	// sign ( key || encID )
+	privKey := host.Peerstore().PrivKey(host.ID())
+	sig, err := privKey.Sign(append(key, encID...))
+	if err != nil {
+		return err
+	}
+
+	pubKey := host.Peerstore().PubKey(host.ID())
+	pbPubKey, err := crypto.PublicKeyToProto(pubKey)
+	if err != nil {
+		return err
+	}
+
+	pmes := NewMessage(IPFS_DH_ADD_PROVIDERS, key, 0)
+	pmes.ProviderPeersII = PeersToPeersWithKey(RawPeerInfosToPBPeers([]peer.AddrInfo{pi}))
+	pmes.ProviderPeersII[0].Signature = sig
+	pmes.ProviderPeersII[0].PublicKey = pbPubKey
+// +added
 
 	return pm.m.SendMessage(ctx, p, pmes)
 }
 
+// +added
 // GetProviders asks a peer for the providers it knows of for a given key. Also returns the K closest peers to the key
 // as described in GetClosestPeers.
-func (pm *ProtocolMessenger) GetProviders(ctx context.Context, p peer.ID, key multihash.Multihash) ([]*peer.AddrInfo, []*peer.AddrInfo, error) {
+func (pm *ProtocolMessenger) GetProviders(
+		ctx context.Context,
+		p peer.ID,
+		key []byte,
+	) ([]*peer.AddrInfo, []*peer.AddrInfo, error) {
+	pmes := NewMessage(IPFS_GET_PROVIDERS, key, 0)
+	resp, err := pm.m.SendRequest(ctx, p, pmes)
+	if err != nil {
+		return nil, nil, err
+	}
+	provs := PBPeersToAddrInfos(resp.GetProviderPeersII())
+	closerPeers := PBPeersToPeerInfos(resp.GetCloserPeers())
+	return provs, closerPeers, nil
+}
+// +added
+
+/* -removed
+	func (pm *ProtocolMessenger) GetProviders(ctx context.Context, p peer.ID, key multihash.Multihash) ([]*peer.AddrInfo, []*peer.AddrInfo, error) { 
+
 	pmes := NewMessage(IPFS_GET_PROVIDERS, key, 0)
 	respMsg, err := pm.m.SendRequest(ctx, p, pmes)
 	if err != nil {
@@ -160,6 +213,7 @@ func (pm *ProtocolMessenger) GetProviders(ctx context.Context, p peer.ID, key mu
 	closerPeers := PBPeersToPeerInfos(respMsg.GetCloserPeers())
 	return provs, closerPeers, nil
 }
+*/ 
 
 // Ping sends a ping message to the passed peer and waits for a response.
 func (pm *ProtocolMessenger) Ping(ctx context.Context, p peer.ID) error {
@@ -172,4 +226,31 @@ func (pm *ProtocolMessenger) Ping(ctx context.Context, p peer.ID) error {
 		return fmt.Errorf("got unexpected response type: %v", resp.Feature)
 	}
 	return nil
+}
+
+
+// NEW METHODS :)
+
+// GetProvidersByPrefix asks a peer for the providers it knows of for a given key prefix.
+// The returned providers list is a list of providers that have the given fullKey.
+// also returns K closest peers.
+func (pm *ProtocolMessenger) GetProvidersByPrefix(
+	ctx context.Context,
+	p peer.ID,
+	lookupKey []byte,
+	fullKey []byte,
+) ([]*peer.AddrInfo, []*peer.AddrInfo, error) {
+	pmes := NewMessage(IPFS_DH_GET_PROVIDERS, lookupKey, 0) //NewGetProvidersMessage(IPFS_DH_GET_PROVIDERS, lookupKey, 0)
+	resp, err := pm.m.SendRequest(ctx, p, pmes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logger.Infof("GetProvidersByPrefix received %d provs", len(resp.GetProviderPeers()))
+
+	// if this is a prefix lookup, the providers might not actually have
+	// the content we're looking for. discard all that don't
+	provs := PBPeersWithKeyToAddrInfos(resp.GetProviderPeersII(), fullKey)
+	closerPeers := PBPeersToPeerInfos(resp.GetCloserPeers())
+	return provs, closerPeers, nil
 }
