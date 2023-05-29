@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
+	// "github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
+	"github.com/stretchr/testify/require"
 
 	mh "github.com/multiformats/go-multihash"
 
@@ -27,16 +28,25 @@ func TestProviderManager(t *testing.T) {
 	defer cancel()
 
 	mid := peer.ID("testing")
-	ps, err := pstoremem.NewPeerstore()
+	// ps, err := pstoremem.NewPeerstore()
+	p, err := NewProviderManager(ctx, mid, dssync.MutexWrap(ds.NewMapDatastore())) // +added
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := NewProviderManager(ctx, mid, ps, dssync.MutexWrap(ds.NewMapDatastore()))
+	// p, err := NewProviderManager(ctx, mid, ps, dssync.MutexWrap(ds.NewMapDatastore())) -removed
+
+//+added
+	a := u.Hash([]byte("test"))
+	err = p.AddProvider(ctx, a, peer.ID("testingprovider"))
+//+added
 	if err != nil {
 		t.Fatal(err)
 	}
+/* -removed
 	a := u.Hash([]byte("test"))
 	p.AddProvider(ctx, a, peer.AddrInfo{ID: peer.ID("testingprovider")})
+*/
 
 	// Not cached
 	// TODO verify that cache is empty
@@ -52,8 +62,22 @@ func TestProviderManager(t *testing.T) {
 		t.Fatal("Could not retrieve provider.")
 	}
 
+/* -removed
 	p.AddProvider(ctx, a, peer.AddrInfo{ID: peer.ID("testingprovider2")})
 	p.AddProvider(ctx, a, peer.AddrInfo{ID: peer.ID("testingprovider3")})
+*/
+
+//+added
+	err = p.AddProvider(ctx, a, peer.ID("testingprovider2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = p.AddProvider(ctx, a, peer.ID("testingprovider3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+//+added
+
 	// TODO verify that cache is already up to date
 	resp, _ = p.GetProviders(ctx, a)
 	if len(resp) != 3 {
@@ -72,12 +96,17 @@ func TestProvidersDatastore(t *testing.T) {
 	defer cancel()
 
 	mid := peer.ID("testing")
+
+/* -removed
 	ps, err := pstoremem.NewPeerstore()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	p, err := NewProviderManager(ctx, mid, ps, dssync.MutexWrap(ds.NewMapDatastore()))
+*/
+ 
+	p, err := NewProviderManager(ctx, mid, dssync.MutexWrap(ds.NewMapDatastore())) //+added
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +117,13 @@ func TestProvidersDatastore(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		h := u.Hash([]byte(fmt.Sprint(i)))
 		mhs = append(mhs, h)
-		p.AddProvider(ctx, h, peer.AddrInfo{ID: friend})
+		// p.AddProvider(ctx, h, peer.AddrInfo{ID: friend}) // -removed
+//+added
+		err = p.AddProvider(ctx, h, friend)
+		if err != nil {
+			t.Fatal(err)
+		}
+//+added
 	}
 
 	for _, c := range mhs {
@@ -96,7 +131,8 @@ func TestProvidersDatastore(t *testing.T) {
 		if len(resp) != 1 {
 			t.Fatal("Could not retrieve provider.")
 		}
-		if resp[0].ID != friend {
+		// if resp[0].ID != friend { // -removed
+		if resp[0] != friend { //+added
 			t.Fatal("expected provider to be 'friend'")
 		}
 	}
@@ -162,11 +198,14 @@ func TestProvidesExpire(t *testing.T) {
 
 	ds := dssync.MutexWrap(ds.NewMapDatastore())
 	mid := peer.ID("testing")
+/* -removed
 	ps, err := pstoremem.NewPeerstore()
 	if err != nil {
 		t.Fatal(err)
 	}
 	p, err := NewProviderManager(ctx, mid, ps, ds)
+*/
+	p, err := NewProviderManager(ctx, mid, ds) //+added
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,15 +218,39 @@ func TestProvidesExpire(t *testing.T) {
 	}
 
 	for _, h := range mhs[:5] {
+		/* -removed
 		p.AddProvider(ctx, h, peer.AddrInfo{ID: peers[0]})
 		p.AddProvider(ctx, h, peer.AddrInfo{ID: peers[1]})
+		*/
+//+added
+		err = p.AddProvider(ctx, h, peers[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = p.AddProvider(ctx, h, peers[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+//+added
 	}
 
 	time.Sleep(time.Second / 4)
 
 	for _, h := range mhs[5:] {
+		/* -removed
 		p.AddProvider(ctx, h, peer.AddrInfo{ID: peers[0]})
 		p.AddProvider(ctx, h, peer.AddrInfo{ID: peers[1]})
+		*/
+//+added
+		err = p.AddProvider(ctx, h, peers[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = p.AddProvider(ctx, h, peers[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+//+added
 	}
 
 	for _, h := range mhs {
@@ -273,12 +336,15 @@ func TestLargeProvidersSet(t *testing.T) {
 	}
 
 	mid := peer.ID("myself")
+/* -removed
 	ps, err := pstoremem.NewPeerstore()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	p, err := NewProviderManager(ctx, mid, ps, dstore)
+*/
+	p, err := NewProviderManager(ctx, mid, dstore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +355,13 @@ func TestLargeProvidersSet(t *testing.T) {
 		h := u.Hash([]byte(fmt.Sprint(i)))
 		mhs = append(mhs, h)
 		for _, pid := range peers {
-			p.AddProvider(ctx, h, peer.AddrInfo{ID: pid})
+			// p.AddProvider(ctx, h, peer.AddrInfo{ID: pid}) // -removed
+//+added
+			err = p.AddProvider(ctx, h, pid)
+			if err != nil {
+				t.Fatal(err)
+			}
+//+added
 		}
 	}
 
@@ -313,22 +385,42 @@ func TestUponCacheMissProvidersAreReadFromDatastore(t *testing.T) {
 	p1, p2 := peer.ID("a"), peer.ID("b")
 	h1 := u.Hash([]byte("1"))
 	h2 := u.Hash([]byte("2"))
-	ps, err := pstoremem.NewPeerstore()
+	// ps, err := pstoremem.NewPeerstore() // -removed
+
+	pm, err := NewProviderManager(ctx, p1, dssync.MutexWrap(ds.NewMapDatastore()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pm, err := NewProviderManager(ctx, p1, ps, dssync.MutexWrap(ds.NewMapDatastore()))
+	// pm, err := NewProviderManager(ctx, p1, ps, dssync.MutexWrap(ds.NewMapDatastore())) // -removed
+
+//+added
+	// add provider
+	err = pm.AddProvider(ctx, h1, p1)
+//+added
 	if err != nil {
 		t.Fatal(err)
 	}
-
+/* -removed
 	// add provider
 	pm.AddProvider(ctx, h1, peer.AddrInfo{ID: p1})
 	// make the cached provider for h1 go to datastore
 	pm.AddProvider(ctx, h2, peer.AddrInfo{ID: p1})
 	// now just offloaded record should be brought back and joined with p2
 	pm.AddProvider(ctx, h1, peer.AddrInfo{ID: p2})
+*/
+
+// +added
+	err = pm.AddProvider(ctx, h2, p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = pm.AddProvider(ctx, h1, p2)
+	if err != nil {
+		t.Fatal(err)
+	}
+// +added
 
 	h1Provs, _ := pm.GetProviders(ctx, h1)
 	if len(h1Provs) != 2 {
@@ -342,25 +434,128 @@ func TestWriteUpdatesCache(t *testing.T) {
 
 	p1, p2 := peer.ID("a"), peer.ID("b")
 	h1 := u.Hash([]byte("1"))
-	ps, err := pstoremem.NewPeerstore()
+	// ps, err := pstoremem.NewPeerstore() // -removed
+
+	pm, err := NewProviderManager(ctx, p1, dssync.MutexWrap(ds.NewMapDatastore()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pm, err := NewProviderManager(ctx, p1, ps, dssync.MutexWrap(ds.NewMapDatastore()))
+	// pm, err := NewProviderManager(ctx, p1, ps, dssync.MutexWrap(ds.NewMapDatastore())) // -removed
+
+//+added
+	// add provider
+	err = pm.AddProvider(ctx, h1, p1)
+//+added
 	if err != nil {
 		t.Fatal(err)
 	}
-
+/* -removed
 	// add provider
 	pm.AddProvider(ctx, h1, peer.AddrInfo{ID: p1})
 	// force into the cache
 	pm.GetProviders(ctx, h1)
 	// add a second provider
 	pm.AddProvider(ctx, h1, peer.AddrInfo{ID: p2})
+*/
+
+//+added
+	_, err = pm.GetProviders(ctx, h1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pm.AddProvider(ctx, h1, p2)
+	if err != nil {
+		t.Fatal(err)
+	}
+//+added
 
 	c1Provs, _ := pm.GetProviders(ctx, h1)
 	if len(c1Provs) != 2 {
 		t.Fatalf("expected h1 to be provided by 2 peers, is by %d", len(c1Provs))
 	}
+}
+
+
+// NEW TESTS
+
+func TestPrefixesMatch(t *testing.T) {
+	testCases := []struct {
+		a, b     []byte
+		bits     int
+		expected bool
+	}{
+		{
+			a:        []byte{},
+			b:        []byte{},
+			bits:     0,
+			expected: true,
+		},
+		{
+			a:        []byte{},
+			b:        []byte{},
+			bits:     1,
+			expected: false,
+		},
+		{
+			a:        []byte{0x1},
+			b:        []byte{},
+			bits:     1,
+			expected: false,
+		},
+		{
+			a:        []byte{0x1},
+			b:        []byte{0x3},
+			bits:     1,
+			expected: true,
+		},
+		{
+			a:        []byte{0x1},
+			b:        []byte{0xff, 0xff},
+			bits:     1,
+			expected: true,
+		},
+		{
+			a:        []byte{0x1},
+			b:        []byte{0b11111110, 0xff},
+			bits:     1,
+			expected: false,
+		},
+		{
+			a:        []byte{0x3},
+			b:        []byte{0xff},
+			bits:     2,
+			expected: true,
+		},
+		{
+			a:        []byte{0xff, 0x1},
+			b:        []byte{0xff, 0xff},
+			bits:     9,
+			expected: true,
+		},
+		{
+			a:        []byte{0xff, 0x0},
+			b:        []byte{0xff, 0xff},
+			bits:     9,
+			expected: false,
+		},
+		{
+			a:        []byte{0xff},
+			b:        []byte{0xff},
+			bits:     9,
+			expected: false,
+		},
+		{
+			a:        []byte{0xff, 0b01111111},
+			b:        []byte{0xff, 0xff},
+			bits:     15,
+			expected: true,
+		},
+	}
+
+	for i, tc := range testCases {
+		res := prefixesMatch(tc.a, tc.b, tc.bits)
+		require.Equal(t, tc.expected, res, fmt.Sprintf("case %d failed", i))
+	}
+
 }

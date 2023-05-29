@@ -5,7 +5,8 @@ import (
 	"sort"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	ks "github.com/whyrusleeping/go-keyspace"
+	ks "github.com/ChainSafe/go-keyspace" // TODO: change later (by jhertz)
+	// ks "github.com/whyrusleeping/go-keyspace"
 )
 
 // PeerState describes the state of a peer ID during the lifecycle of an individual lookup.
@@ -156,4 +157,14 @@ func (qp *QueryPeerset) NumHeard() int {
 // NumWaiting returns the number of peers in state PeerWaiting.
 func (qp *QueryPeerset) NumWaiting() int {
 	return len(qp.GetClosestInStates(PeerWaiting))
+}
+
+
+// FROM DOUBLE-HASHING TEAM
+func NewQueryPeersetFromHash(hash [32]byte) *QueryPeerset {
+	return &QueryPeerset{
+		key:    ks.XORKeySpace.KeyFromHash(hash),
+		all:    []queryPeerState{},
+		sorted: false,
+	}
 }

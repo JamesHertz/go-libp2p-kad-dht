@@ -1,15 +1,17 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
-	peerstoreImpl "github.com/libp2p/go-libp2p/p2p/host/peerstore"
+	// "github.com/libp2p/go-libp2p/core/peerstore"
+	// peerstoreImpl "github.com/libp2p/go-libp2p/p2p/host/peerstore"
 
 	lru "github.com/hashicorp/golang-lru/simplelru"
 	ds "github.com/ipfs/go-datastore"
@@ -35,7 +37,7 @@ const (
 
 // ProvideValidity is the default time that a Provider Record should last on DHT
 // This value is also known as Provider Record Expiration Interval.
-var ProvideValidity = time.Hour * 48
+var ProvideValidity = time.Hour * 48 // 24??
 var defaultCleanupInterval = time.Hour
 var lruCacheSize = 256
 var batchBufferSize = 256
@@ -43,8 +45,15 @@ var log = logging.Logger("providers")
 
 // ProviderStore represents a store that associates peers and their addresses to keys.
 type ProviderStore interface {
+	/* - removed
 	AddProvider(ctx context.Context, key []byte, prov peer.AddrInfo) error
 	GetProviders(ctx context.Context, key []byte) ([]peer.AddrInfo, error)
+	*/
+// +added
+	AddProvider(ctx context.Context, key []byte, prov peer.ID) error
+	GetProviders(ctx context.Context, key []byte) ([]peer.ID, error)
+	GetProvidersForPrefix(ctx context.Context, key []byte, prefixBitLength int) (map[string][]peer.ID, error)
+// +added
 }
 
 // ProviderManager adds and pulls providers out of the datastore,
@@ -54,15 +63,32 @@ type ProviderManager struct {
 	// all non channel fields are meant to be accessed only within
 	// the run method
 	cache  lru.LRUCache
-	pstore peerstore.Peerstore
+	// pstore peerstore.Peerstore // -removed
 	dstore *autobatch.Datastore
-
+/* -removed
 	newprovs chan *addProv
 	getprovs chan *getProv
 	proc     goprocess.Process
+*/
+
+// +added
+    newprovs         chan *addProv
+    getprovs         chan *getProv
+    getProvsByPrefix chan *getProvByPrefix
+    proc             goprocess.Process
+// +added
 
 	cleanupInterval time.Duration
 }
+
+// +added
+type getProvByPrefix struct {
+	ctx             context.Context
+	key             []byte
+	prefixBitLength int
+	resp            chan map[string][]peer.ID
+}
+// +added
 
 var _ ProviderStore = (*ProviderManager)(nil)
 
@@ -109,12 +135,15 @@ type getProv struct {
 }
 
 // NewProviderManager constructor
-func NewProviderManager(ctx context.Context, local peer.ID, ps peerstore.Peerstore, dstore ds.Batching, opts ...Option) (*ProviderManager, error) {
+// func NewProviderManager(ctx context.Context, local peer.ID, ps peerstore.Peerstore, dstore ds.Batching, opts ...Option) (*ProviderManager, error) { // - removed
+func NewProviderManager(ctx context.Context, local peer.ID, dstore ds.Batching, opts ...Option) (*ProviderManager, error) {  // +added
+
 	pm := new(ProviderManager)
 	pm.self = local
 	pm.getprovs = make(chan *getProv)
 	pm.newprovs = make(chan *addProv)
-	pm.pstore = ps
+	pm.getProvsByPrefix = make(chan *getProvByPrefix) //+added
+	// pm.pstore = ps // -removed
 	pm.dstore = autobatch.NewAutoBatching(dstore, batchBufferSize)
 	cache, err := lru.NewLRU(lruCacheSize, nil)
 	if err != nil {
@@ -176,6 +205,20 @@ func (pm *ProviderManager) run(ctx context.Context, proc goprocess.Process) {
 
 			// set the cap so the user can't append to this.
 			gp.resp <- provs[0:len(provs):len(provs)]
+// +added
+			continue
+
+
+		case gp := <-pm.getProvsByPrefix:
+			provs, err := pm.getProviderSetForPrefix(gp.ctx, gp.key, gp.prefixBitLength)
+			if err != nil && err != ds.ErrNotFound {
+				log.Error("error reading providers: ", err)
+			}
+
+			// set the cap so the user can't append to this.
+			gp.resp <- provs.keyToProviders
+			continue
+// +added
 		case res, ok := <-gcQueryRes:
 			if !ok {
 				if err := gcQuery.Close(); err != nil {
@@ -239,14 +282,18 @@ func (pm *ProviderManager) run(ctx context.Context, proc goprocess.Process) {
 }
 
 // AddProvider adds a provider
+func (pm *ProviderManager) AddProvider(ctx context.Context, k []byte, provInfo peer.ID) error { // +added
+/* -removed
 func (pm *ProviderManager) AddProvider(ctx context.Context, k []byte, provInfo peer.AddrInfo) error {
 	if provInfo.ID != pm.self { // don't add own addrs.
 		pm.pstore.AddAddrs(provInfo.ID, provInfo.Addrs, ProviderAddrTTL)
 	}
+*/
 	prov := &addProv{
 		ctx: ctx,
 		key: k,
-		val: provInfo.ID,
+		val: provInfo, // +added
+		// val: provInfo.ID, -removed
 	}
 	select {
 	case pm.newprovs <- prov:
@@ -260,7 +307,9 @@ func (pm *ProviderManager) AddProvider(ctx context.Context, k []byte, provInfo p
 func (pm *ProviderManager) addProv(ctx context.Context, k []byte, p peer.ID) error {
 	now := time.Now()
 	if provs, ok := pm.cache.Get(string(k)); ok {
-		provs.(*providerSet).setVal(p, now)
+		// provs.(*providerSet).setVal(p, now) -removed
+		provs.(*providerSet).setVal(p, k, now) // +added
+
 	} // else not cached, just write through
 
 	return writeProviderEntry(ctx, pm.dstore, k, p, now)
@@ -281,12 +330,14 @@ func mkProvKeyFor(k []byte, p peer.ID) string {
 }
 
 func mkProvKey(k []byte) string {
-	return ProvidersKeyPrefix + base32.RawStdEncoding.EncodeToString(k)
+	// return ProvidersKeyPrefix + base32.RawStdEncoding.EncodeToString(k) // -removed
+	return ProvidersKeyPrefix + hex.EncodeToString(k) // +added
 }
 
 // GetProviders returns the set of providers for the given key.
 // This method _does not_ copy the set. Do not modify it.
-func (pm *ProviderManager) GetProviders(ctx context.Context, k []byte) ([]peer.AddrInfo, error) {
+func (pm *ProviderManager) GetProviders(ctx context.Context, k []byte) ([]peer.ID, error) { // +added
+// func (pm *ProviderManager) GetProviders(ctx context.Context, k []byte) ([]peer.AddrInfo, error) { -removed
 	gp := &getProv{
 		ctx:  ctx,
 		key:  k,
@@ -301,7 +352,8 @@ func (pm *ProviderManager) GetProviders(ctx context.Context, k []byte) ([]peer.A
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case peers := <-gp.resp:
-		return peerstoreImpl.PeerInfos(pm.pstore, peers), nil
+		// return peerstoreImpl.PeerInfos(pm.pstore, peers), nil // -removed
+		return peers, nil // +added
 	}
 }
 
@@ -347,6 +399,7 @@ func loadProviderSet(ctx context.Context, dstore ds.Datastore, k []byte) (*provi
 		if !ok {
 			break
 		}
+/* -removed
 		if e.Error != nil {
 			log.Error("got an error: ", e.Error)
 			continue
@@ -367,10 +420,19 @@ func loadProviderSet(ctx context.Context, dstore ds.Datastore, k []byte) (*provi
 			}
 			continue
 		}
+*/
 
+// +added
+		pid, decKey, t, err := handleQueryKey(ctx, dstore, e, now)
+		if err != nil {
+			log.Debugf("failed to handle query key: %s", err)
+			continue
+		}
+// +added
+
+/* -removed
 		lix := strings.LastIndex(e.Key, "/")
-
-		decstr, err := base32.RawStdEncoding.DecodeString(e.Key[lix+1:])
+		decstr, err := base32.RawStdEncoding.DecodeString(e.Key[lix+1:]) // -removed
 		if err != nil {
 			log.Error("base32 decoding error: ", err)
 			err = dstore.Delete(ctx, ds.RawKey(e.Key))
@@ -387,6 +449,61 @@ func loadProviderSet(ctx context.Context, dstore ds.Datastore, k []byte) (*provi
 
 	return out, nil
 }
+*/
+
+		out.setVal(pid, decKey, t) // added
+	}
+		
+	return out, nil
+}
+
+// loads the ProviderSet out of the datastore
+func loadProviderSetByPrefix(ctx context.Context, dstore ds.Datastore, k []byte, prefixBitLength int) (*providerSet, error) {
+	// for prefix lookups, this already returns all providers with the prefix, so don't need to modify
+	// note: we slice off the last byte since the prefix is by *bits*, so we need to manually xor and check
+	// how many bits match in the final byte.
+	prefixKey := mkProvKey(k[:len(k)-1])
+
+	q := dsq.Query{
+		Filters: []dsq.Filter{
+			dsq.FilterKeyPrefix{Prefix: prefixKey},
+		},
+	}
+
+	res, err := dstore.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Close()
+
+	now := time.Now()
+	out := newProviderSet()
+	i := 0
+	for {
+		e, ok := res.NextSync()
+		if !ok {
+			break
+		}
+
+		pid, decKey, t, err := handleQueryKey(ctx, dstore, e, now)
+		if err != nil {
+			log.Debugf("failed to handle query key: %s", err)
+			continue
+		}
+
+		// check that the last byte of the lookup key and the corresponding byte in the db key
+		// match; ie that the bits set in the prefixed key match that of the db key
+		// if they don't, then ignore this record
+		if !prefixesMatch(k, decKey, prefixBitLength) {
+			continue
+		}
+
+		out.setVal(pid, decKey, t)
+		i++
+	}
+
+	return out, nil
+}
 
 func readTimeValue(data []byte) (time.Time, error) {
 	nsec, n := binary.Varint(data)
@@ -395,4 +512,143 @@ func readTimeValue(data []byte) (time.Time, error) {
 	}
 
 	return time.Unix(0, nsec), nil
+}
+
+
+
+// OTHER FUNCTIONS
+
+// GetProvidersForPrefix returns the set of providers with the given prefix, as well
+// as the full key they provide.
+func (pm *ProviderManager) GetProvidersForPrefix(ctx context.Context, k []byte, prefixBitLength int) (map[string][]peer.ID, error) {
+	gp := &getProvByPrefix{
+		ctx:             ctx,
+		key:             k,
+		prefixBitLength: prefixBitLength,
+		resp:            make(chan map[string][]peer.ID, 1), // buffered to prevent sender from blocking
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case pm.getProvsByPrefix <- gp:
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case peers := <-gp.resp:
+		return peers, nil
+	}
+}
+
+// returns the ProviderSet if it already exists on cache, otherwise loads it from datasatore
+func (pm *ProviderManager) getProviderSetForPrefix(ctx context.Context, k []byte, prefixBitLength int) (*providerSet, error) {
+	cached, ok := pm.cache.Get(string(k))
+	if ok {
+		return cached.(*providerSet), nil
+	}
+
+	pset, err := loadProviderSetByPrefix(ctx, pm.dstore, k, prefixBitLength)
+	if err != nil {
+		return nil, err
+	}
+
+	// note: prefixes are not cached, unlike full key lookups.
+	// is this okay?
+	return pset, nil
+}
+
+
+func handleQueryKey(ctx context.Context, dstore ds.Datastore, e dsq.Result, now time.Time) (peer.ID, []byte, time.Time, error) {
+	if e.Error != nil {
+		return "", nil, time.Time{}, e.Error
+	}
+
+	// check expiration time
+	t, err := readTimeValue(e.Value)
+	switch {
+	case err != nil:
+		// couldn't parse the time
+		log.Error("parsing providers record from disk: ", err)
+		fallthrough
+	case now.Sub(t) > ProvideValidity:
+		// or just expired
+		err = dstore.Delete(ctx, ds.RawKey(e.Key))
+		if err != nil && err != ds.ErrNotFound {
+			return "", nil, time.Time{}, fmt.Errorf("failed to remove provider record from disk: %w", err)
+		}
+	}
+
+	lix := strings.LastIndex(e.Key, "/")
+
+	// decode peer ID
+	decstr, err := base32.RawStdEncoding.DecodeString(e.Key[lix+1:])
+	if err != nil {
+		log.Error("hex decoding error: ", err)
+		err = dstore.Delete(ctx, ds.RawKey(e.Key))
+		if err != nil && err != ds.ErrNotFound {
+			return "", nil, time.Time{}, fmt.Errorf("failed to remove provider record from disk: %w", err)
+		}
+	}
+
+	pid := peer.ID(decstr)
+
+	// decode provided key
+	decKey, err := hex.DecodeString(e.Key[len(ProvidersKeyPrefix):lix])
+	if err != nil {
+		log.Error("base32 decoding error: ", err)
+		err = dstore.Delete(ctx, ds.RawKey(e.Key))
+		if err != nil && err != ds.ErrNotFound {
+			return "", nil, time.Time{}, fmt.Errorf("failed to remove provider record from disk: %w", err)
+		}
+	}
+
+	return pid, decKey, t, nil
+}
+
+// prefixesMatch returns true if the bits up to `prefixBitLength` match.
+func prefixesMatch(a, b []byte, prefixBitLength int) bool {
+	if prefixBitLength == 0 {
+		return true
+	}
+
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
+
+	byteLen := prefixBitLength / 8
+	if prefixBitLength%8 == 0 && (len(a) < byteLen || len(b) < byteLen) {
+		return false
+	}
+
+	if prefixBitLength%8 != 0 && (len(a) < byteLen+1 || len(b) < byteLen+1) {
+		return false
+	}
+
+	if !bytes.Equal(a[:byteLen], b[:byteLen]) {
+		return false
+	}
+
+	if prefixBitLength%8 == 0 {
+		return true
+	}
+
+	cb := numCommonBits(a[byteLen], b[byteLen])
+	return cb >= prefixBitLength%8
+}
+
+func numCommonBits(a, b byte) int {
+	// xor last byte to see how many bits in common they have
+	common := a ^ b
+
+	// left shift by 1 bit each iteration
+	// once common becomes 0, return 8 - number of iterations
+	i := 8
+	for {
+		if common == 0 {
+			return i
+		}
+
+		common = common << 1
+		i--
+	}
 }

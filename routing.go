@@ -20,6 +20,8 @@ import (
 	kb "github.com/libp2p/go-libp2p-kbucket"
 	record "github.com/libp2p/go-libp2p-record"
 	"github.com/multiformats/go-multihash"
+
+	enc "github.com/libp2p/go-libp2p-kad-dht/internal/encrypt"
 )
 
 // This file implements the Routing interface for the IpfsDHT struct.
@@ -380,7 +382,26 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 	logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
 
 	// add self locally
-	dht.providerStore.AddProvider(ctx, keyMH, peer.AddrInfo{ID: dht.self})
+	// dht.providerStore.AddProvider(ctx, keyMH, peer.AddrInfo{ID: dht.self}) -- removed
+
+// +added
+	 
+	// hash multihash for double-hashing implementation
+	mhHash, _ := internal.Sha256Multihash(keyMH)
+	logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH), "mhHash", mhHash)
+
+	ct, err := enc.EncryptAES([]byte(dht.self), enc.MultihashToKey(keyMH))
+	if err != nil {
+		return err
+	}
+
+	// add (encrypted) self locally
+	err = dht.providerStore.AddProvider(ctx, mhHash, peer.ID(ct)) // TODO: change this :)
+	if err != nil {
+		return err
+	}
+
+// +added
 	if !brdcst {
 		return nil
 	}
@@ -407,7 +428,8 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 	}
 
 	var exceededDeadline bool
-	peers, err := dht.GetClosestPeers(closerCtx, string(keyMH)) // TODO: change over here
+// peers, err := dht.GetClosestPeers(closerCtx, string(keyMH)) - removed
+	peers, err := dht.GetClosestPeers(closerCtx, string(mhHash[:]))
 	switch err {
 	case context.DeadlineExceeded:
 		// If the _inner_ deadline has been exceeded but the _outer_
@@ -427,8 +449,11 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 		wg.Add(1)
 		go func(p peer.ID) {
 			defer wg.Done()
-			logger.Debugf("putProvider(%s, %s)", internal.LoggableProviderRecordBytes(keyMH), p)
-			err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.host)
+			// logger.Debugf("putProvider(%s, %s)", internal.LoggableProviderRecordBytes(keyMH), p) - removed
+			// err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.host) - removed
+			logger.Debugf("putProvider(%s, %s)", internal.LoggableProviderRecordBytes(mhHash[:]), p) // +added
+			err := dht.protoMessenger.PutProvider(ctx, p, mhHash[:], dht.host, []byte(ct))           // + added
+
 			if err != nil {
 				logger.Debug(err)
 			}
@@ -450,7 +475,8 @@ func (dht *IpfsDHT) FindProviders(ctx context.Context, c cid.Cid) ([]peer.AddrIn
 	}
 
 	var providers []peer.AddrInfo
-	for p := range dht.FindProvidersAsync(ctx, c, dht.bucketSize) {
+// 	for p := range dht.FindProvidersAsync(ctx, c, dht.bucketSize) { - removed
+	for p := range dht.FindProvidersAsync(ctx, c, 0) { // +added
 		providers = append(providers, p)
 	}
 	return providers, nil
@@ -486,16 +512,37 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 
 	findAll := count == 0
 
-	ps := make(map[peer.ID]peer.AddrInfo)
+	// ps := make(map[peer.ID]peer.AddrInfo) - removed
+// +added
+	// dht.prefixLengthMu.RLock()
+	prefixLength := prefixBitLength //dht.prefixLength
+	// dht.prefixLengthMu.RUnlock()
+	
+	// hash multihash for double-hashing implementation
+	mhHash, extraByteLength := internal.Sha256Multihash(key)
+	extraBitLength := extraByteLength * 8
+	logger.Debugw("finding providers", "cid", key, "mhHash", mhHash, "mh", internal.LoggableProviderRecordBytes(key))
+	
+	ps := make(map[peer.ID]struct{})
+// +added
+
 	psLock := &sync.Mutex{}
-	psTryAdd := func(p peer.AddrInfo) bool {
+	// psTryAdd := func(p peer.AddrInfo) bool { - removed
+	psTryAdd := func(p peer.ID) bool { // +add
 		psLock.Lock()
 		defer psLock.Unlock()
-		pi, ok := ps[p.ID]
-		if (!ok || ((len(pi.Addrs) == 0) && len(p.Addrs) > 0)) && (len(ps) < count || findAll) {
-			ps[p.ID] = p
-			return true
-		}
+/*
+	pi, ok := ps[p.ID]
+	if (!ok || ((len(pi.Addrs) == 0) && len(p.Addrs) > 0)) && (len(ps) < count || findAll) {
+		ps[p.ID] = p
+*/
+// +added
+		_, ok := ps[p]
+		if !ok && (len(ps) < count || findAll) {
+			ps[p] = struct{}{}
+ 			return true
+ 		}
+// +added
 		return false
 	}
 	psSize := func() int {
@@ -504,11 +551,28 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 		return len(ps)
 	}
 
-	provs, err := dht.providerStore.GetProviders(ctx, key)
+
+	// provs, err := dht.providerStore.GetProviders(ctx, key) -removed
+	provs, err := dht.providerStore.GetProviders(ctx, mhHash) // +added
 	if err != nil {
 		return
 	}
+
 	for _, p := range provs {
+		logger.Infof("got provider from local store: %x", p)
+		// decrypt peer record if needed
+		if len(p) == encryptedPeerIDLength {
+			ptPeer, err := decryptAES([]byte(p), decKey)
+			if err != nil {
+				logger.Errorf("failed to decrypt encrypted peer ID: %s", err)
+				// TODO: remove from provider store, since it's a bad record
+				continue
+			}
+			p = peer.ID(ptPeer)
+		}
+
+
+
 		// NOTE: Assuming that this list of peers is unique
 		if psTryAdd(p) {
 			select {
