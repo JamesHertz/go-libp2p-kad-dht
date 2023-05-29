@@ -114,7 +114,7 @@ var Defaults = func(o *Config) error {
 	o.RoutingTable.RefreshInterval = 10 * time.Minute
 	o.RoutingTable.AutoRefresh = true
 	o.RoutingTable.PeerFilter = EmptyRTFilter
-	o.MaxRecordAge = providers.ProvideValidity
+	o.MaxRecordAge = providers.ProvideValidity // todo: think about this [ 36 * time.Hour ]
 
 	o.BucketSize = defaultBucketSize
 	o.Concurrency = 10

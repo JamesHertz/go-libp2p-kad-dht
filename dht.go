@@ -248,8 +248,8 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 	dht.proc.Go(dht.populatePeers)
 
 	mylogger.Info("Running my DHT")
-	mylogger.Info("dht.features      => %v\n", dht.features.Features())
-	mylogger.Info("dht.host.features => %v\n", dht.host.GetFeatures())
+	mylogger.Infof("dht.features      => %v\n", dht.features.Features())
+	mylogger.Infof("dht.host.features => %v\n", dht.host.GetFeatures())
 	return dht, nil
 }
 
