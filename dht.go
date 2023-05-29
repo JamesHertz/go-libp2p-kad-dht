@@ -72,6 +72,8 @@ const (
 	protectedBuckets = 2
 )
 
+const prefixBitLength  = 64 // default :)
+
 type addPeerRTReq struct {
 	p         peer.ID
 	queryPeer bool

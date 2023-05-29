@@ -41,6 +41,7 @@ message Message {
 		repeated string features = 4;
 	}
 
+	// TODO: should I have features over here???
 	message PeerWithKey {
 		// ID of a given peer.
 		bytes id = 1 [(gogoproto.customtype) = "byteString", (gogoproto.nullable) = false];

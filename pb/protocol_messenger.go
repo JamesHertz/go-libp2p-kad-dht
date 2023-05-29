@@ -20,6 +20,11 @@ var logger = logging.Logger("dht")
 
 // features (at least by now c:)
 const (
+	// new features :)
+	IPFS_DH_GET_PROVIDERS peer.Feature = "/ipfs/dh/getproviders"
+	IPFS_DH_ADD_PROVIDERS peer.Feature = "/ipfs/dh/getproviders"
+
+	// old features
 	IPFS_GET_PROVIDERS peer.Feature = "/ipfs/getproviders"
 	IPFS_ADD_PROVIDERS peer.Feature = "/ipfs/putproviders"
 	IPFS_GET_VALUE     peer.Feature = "/ipfs/get"
