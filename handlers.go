@@ -10,6 +10,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	pstore "github.com/libp2p/go-libp2p/p2p/host/peerstore"
 
+	"github.com/libp2p/go-libp2p/core/crypto"
+
 	"github.com/gogo/protobuf/proto"
 	ds "github.com/ipfs/go-datastore"
 	u "github.com/ipfs/go-ipfs-util"
@@ -25,7 +27,7 @@ type dhtHandler func(context.Context, peer.ID, *pb.Message) (*pb.Message, error)
 func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 
 	mylogger.Infof("+new_connection to handle: %s\n", t)
-	if dht.features.HasFeature(t){
+	if dht.features.HasFeature(t) {
 		switch t {
 		case pb.FIND_CLOSEST_PEERS:
 			return dht.handleFindPeer
@@ -308,7 +310,20 @@ func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.
 	}
 
 	resp := pb.NewMessage(pmes.GetMsgFeature(), pmes.GetKey(), pmes.GetClusterLevel())
+	provsToKeys, err := dht.providerStore.GetProvidersForPrefix(ctx, key, int(prefixBitLength))
+    if err != nil {
+    	return nil, err
+    }
 
+	resp.ProviderPeersII = pb.KeyToProvsToPB(dht.host.Network(), dht.peerstore, provsToKeys)
+
+	closer := dht.betterPeersToQuery(pmes, p, dht.bucketSize) // fix this thing :)
+	if closer != nil {
+		resp.CloserPeers = pb.PeerIDsToPBPeers(dht.host.Network(), dht.peerstore, closer)
+	}
+
+	return resp, nil
+	/* -removed
 	// setup providers
 	providers, err := dht.providerStore.GetProviders(ctx, key)
 	if err != nil {
@@ -323,8 +338,8 @@ func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.
 		infos := pstore.PeerInfos(dht.peerstore, closer)
 		resp.CloserPeers = pb.PeerInfosToPBPeers(dht.host.Network(), infos)
 	}
+	*/
 
-	return resp, nil
 }
 
 func (dht *IpfsDHT) handleAddProvider(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
@@ -338,24 +353,74 @@ func (dht *IpfsDHT) handleAddProvider(ctx context.Context, p peer.ID, pmes *pb.M
 	logger.Debugw("adding provider", "from", p, "key", internal.LoggableProviderRecordBytes(key))
 
 	// add provider should use the address given in the message
-	pinfos := pb.PBPeersToPeerInfos(pmes.GetProviderPeers())
-	for _, pi := range pinfos {
-		if pi.ID != p {
-			// we should ignore this provider record! not from originator.
-			// (we should sign them and check signature later...)
-			logger.Debugw("received provider from wrong peer", "from", p, "peer", pi.ID)
-			continue
-		}
+	/* -removed
+		pinfos := pb.PBPeersToPeerInfos(pmes.GetProviderPeers())
+		for _, pi := range pinfos {
+			if pi.ID != p {
+				// we should ignore this provider record! not from originator.
+				// (we should sign them and check signature later...)
+				logger.Debugw("received provider from wrong peer", "from", p, "peer", pi.ID)
+				continue
+			}
 
+			if len(pi.Addrs) < 1 {
+				logger.Debugw("no valid addresses for provider", "from", p)
+				continue
+			}
+
+			dht.providerStore.AddProvider(ctx, key, peer.AddrInfo{ID: p})
+		}
+	*/
+// +added
+	provs := pmes.GetProviderPeersII()
+	pinfos := pb.PBPeersToAddrInfos(provs)
+	for i, pi := range pinfos {
 		if len(pi.Addrs) < 1 {
 			logger.Debugw("no valid addresses for provider", "from", p)
 			continue
 		}
 
-		dht.providerStore.AddProvider(ctx, key, peer.AddrInfo{ID: p})
+		sig := provs[i].Signature
+		pub, err := crypto.PublicKeyFromProto(provs[i].PublicKey)
+		if err != nil {
+			logger.Debugw("failed to unmarshal public key", "from", p, "peer", pi.ID, "error", err)
+			continue
+		}
+
+		// verify that public key corresponds to sender peer ID
+		id, err := peer.IDFromPublicKey(pub)
+		if err != nil {
+			logger.Debugw("failed to derive peer ID from public key", "from", p, "peer", pi.ID, "error", err)
+			continue
+		}
+
+		if id != p {
+			logger.Debugw("remote peer ID does not match public key's peer ID", "from", p, "peer", pi.ID, "error", err)
+			continue
+		}
+
+		ok, err := pub.Verify(append(key, pi.ID...), sig)
+		if err != nil {
+			logger.Debugw("failed to verify signature", "from", p, "peer", pi.ID, "error", err)
+			continue
+		}
+
+		if !ok {
+			logger.Debugw("failed to verify signature", "from", p, "peer", pi.ID)
+			continue
+		}
+
+		err = dht.providerStore.AddProvider(ctx, key, pi.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		logger.Infof("added provider %x for %x", pi.ID, key)
 	}
 
 	return nil, nil
+// +added
+
 }
 
 func convertToDsKey(s []byte) ds.Key {
