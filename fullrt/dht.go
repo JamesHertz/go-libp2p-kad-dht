@@ -40,7 +40,6 @@ import (
 
 	record "github.com/libp2p/go-libp2p-record"
 	recpb "github.com/libp2p/go-libp2p-record/pb"
-	pb "github.com/libp2p/go-libp2p-kad-dht/pb"
 
 	"github.com/libp2p/go-libp2p-xor/kademlia"
 	kadkey "github.com/libp2p/go-libp2p-xor/key"
@@ -106,6 +105,8 @@ type FullRT struct {
 //
 // Not all of the standard DHT options are supported in this DHT.
 func NewFullRT(h host.Host, protocolPrefix protocol.ID, options ...Option) (*FullRT, error) {
+
+// +think: ??
 	fullrtcfg := config{
 		crawlInterval:       time.Hour,
 		bulkSendParallelism: 20,
@@ -151,7 +152,8 @@ func NewFullRT(h host.Host, protocolPrefix protocol.ID, options ...Option) (*Ful
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	pm, err := providers.NewProviderManager(ctx, h.ID(), h.Peerstore(), dhtcfg.Datastore, fullrtcfg.pmOpts...)
+	// pm, err := providers.NewProviderManager(ctx, h.ID(), h.Peerstore(), dhtcfg.Datastore, fullrtcfg.pmOpts...) // removed
+	pm, err := providers.NewProviderManager(ctx, h.ID(), dhtcfg.Datastore) // +added
 	if err != nil {
 		cancel()
 		return nil, err
@@ -785,10 +787,23 @@ func (dht *FullRT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err e
 		return fmt.Errorf("invalid cid: undefined")
 	}
 	keyMH := key.Hash()
-	logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
+	// logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH)) // -removed
+
+//+added
+	mhHash, _ := internal.Sha256Multihash(keyMH)
+	logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH), "mhHash", mhHash)
+//+added
+
 
 	// add self locally
-	dht.ProviderManager.AddProvider(ctx, keyMH, peer.AddrInfo{ID: dht.h.ID()})
+	// dht.ProviderManager.AddProvider(ctx, keyMH, peer.AddrInfo{ID: dht.h.ID()}) // -removed
+// +added
+	err = dht.ProviderManager.AddProvider(ctx, mhHash, dht.h.ID())
+	if err != nil {
+		return err
+	}
+// +added
+
 	if !brdcst {
 		return nil
 	}
@@ -831,7 +846,9 @@ func (dht *FullRT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err e
 	}
 
 	successes := dht.execOnMany(ctx, func(ctx context.Context, p peer.ID) error {
-		err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.h)
+		// err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.h) //-removed
+		err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.h, []byte(dht.h.ID())) //+added
+
 		return err
 	}, peers, true)
 
@@ -941,8 +958,14 @@ func (dht *FullRT) ProvideMany(ctx context.Context, keys []multihash.Multihash) 
 	}
 
 	fn := func(ctx context.Context, p, k peer.ID) error {
+		/*-removed
 		pmes := dht_pb.NewMessage(pb.IPFS_ADD_PROVIDERS, multihash.Multihash(k), 0)
 		pmes.ProviderPeers = pbPeers
+		*/
+//+added
+		pmes := dht_pb.NewMessage(dht_pb.IPFS_DH_ADD_PROVIDERS, multihash.Multihash(k), 0)
+		pmes.ProviderPeersII = dht_pb.PeersToPeersWithKey(pbPeers)
+//+added
 
 		return dht.messageSender.SendMessage(ctx, p, pmes)
 	}
@@ -1219,13 +1242,19 @@ func (dht *FullRT) FindProvidersAsync(ctx context.Context, key cid.Cid, count in
 
 	keyMH := key.Hash()
 
-	logger.Debugw("finding providers", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
+	// logger.Debugw("finding providers", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
 	go dht.findProvidersAsyncRoutine(ctx, keyMH, count, peerOut)
 	return peerOut
 }
 
 func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.Multihash, count int, peerOut chan peer.AddrInfo) {
 	defer close(peerOut)
+
+//+added
+	// hash multihash for double-hashing implementation
+	mhHash, _ := internal.Sha256Multihash(key)
+	logger.Debugw("finding providers", "cid", key, "mhHash", mhHash, "mh", internal.LoggableProviderRecordBytes(key))
+//+added
 
 	findAll := count == 0
 	ps := make(map[peer.ID]struct{})
@@ -1246,26 +1275,39 @@ func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.
 		return len(ps)
 	}
 
-	provs, err := dht.ProviderManager.GetProviders(ctx, key)
+	// provs, err := dht.ProviderManager.GetProviders(ctx, key) // -removed
+	provs, err := dht.ProviderManager.GetProviders(ctx, mhHash[:]) // +added
+
 	if err != nil {
 		return
 	}
 	for _, p := range provs {
 		// NOTE: Assuming that this list of peers is unique
+//+added
+		addrInfo := dht.h.Peerstore().PeerInfo(p)
+		if psTryAdd(p) {
+			select {
+			case peerOut <- addrInfo:
+ 			case <-ctx.Done():
+ 				return
+ 			}
+		}
+//+added
+		/* -removed
 		if psTryAdd(p.ID) {
 			select {
 			case peerOut <- p:
 			case <-ctx.Done():
 				return
 			}
-		}
-
+		*/
 		// If we have enough peers locally, don't bother with remote RPC
 		// TODO: is this a DOS vector?
 		if !findAll && psSize() >= count {
 			return
 		}
 	}
+
 
 	peers, err := dht.GetClosestPeers(ctx, string(key))
 	if err != nil {
@@ -1282,7 +1324,16 @@ func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.
 			ID:   p,
 		})
 
-		provs, closest, err := dht.protoMessenger.GetProviders(ctx, p, key)
+		var (
+			provs  []*peer.AddrInfo
+			closer []*peer.AddrInfo
+			err    error
+		)
+		provs, closer, err = dht.protoMessenger.GetProviders(ctx, p, key)
+
+		/* -removed
+			provs, closest, err := dht.protoMessenger.GetProviders(ctx, p, key)
+		*/
 		if err != nil {
 			return err
 		}
@@ -1304,18 +1355,21 @@ func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.
 			}
 			if !findAll && psSize() >= count {
 				logger.Debugf("got enough providers (%d/%d)", psSize(), count)
-				cancelquery()
+				// cancelquery() //-removed
 				return nil
 			}
 		}
 
 		// Give closer peers back to the query to be queried
-		logger.Debugf("got closer peers: %d %s", len(closest), closest)
+		logger.Debugf("got closer peers: %d %s", len(closer), closer) //+added
+		// logger.Debugf("got closer peers: %d %s", len(closest), closest) //-removed
+
 
 		routing.PublishQueryEvent(ctx, &routing.QueryEvent{
 			Type:      routing.PeerResponse,
 			ID:        p,
-			Responses: closest,
+			Responses: closer, //+added
+			// Responses: closest,
 		})
 		return nil
 	}
