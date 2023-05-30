@@ -30,10 +30,10 @@ import (
 	test "github.com/libp2p/go-libp2p-kad-dht/internal/testing"
 	pb "github.com/libp2p/go-libp2p-kad-dht/pb"
 
-	"github.com/libp2p/go-libp2p-kad-dht/internal"
 	"github.com/ipfs/go-cid"
 	detectrace "github.com/ipfs/go-detect-race"
 	u "github.com/ipfs/go-ipfs-util"
+	"github.com/libp2p/go-libp2p-kad-dht/internal"
 	kb "github.com/libp2p/go-libp2p-kbucket"
 	record "github.com/libp2p/go-libp2p-record"
 	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
@@ -2190,6 +2190,76 @@ func TestProvides_PrefixLookup(t *testing.T) {
 	}
 }
 
+
+func TestFeaturesProperlySet(t *testing.T) {
+	type testCase struct {
+		run func(t *testing.T, dht *IpfsDHT)
+		option []Option
+	}
+
+
+	allFeatures := peer.Features{
+		pb.IPFS_DH_GET_PROVIDERS, pb.IPFS_DH_ADD_PROVIDERS, pb.IPFS_GET_VALUE, 
+	    pb.IPFS_PUT_VALUE, pb.IPFS_PING, pb.FIND_CLOSEST_PEERS,
+	}
+
+	checkFts := func (dht *IpfsDHT, features peer.Features, on bool) bool {
+		fts := dht.host.GetFeatures()
+	    for _, ft := range features{
+			preset := dht.features.HasFeature(ft) &&  fts.HasFeature(ft)
+			if on && !preset  || !on && preset {
+				return false
+			}
+	    }
+
+		return true
+	}
+
+
+	tests := []testCase {
+		{
+			option: []Option{},
+			run: func(t *testing.T, dht*IpfsDHT) {
+				require.True(t, checkFts(dht, allFeatures, true), "on: providesOn && valuesOn")
+			},
+		},
+		{
+			option: []Option{DisableProviders(), ProtocolPrefix("/test")},
+			run: func(t *testing.T, dht *IpfsDHT) {
+				require.True(t, checkFts(dht, allFeatures[2:], true), "on: providesOff && valuesOn")
+				require.True(t, checkFts(dht, allFeatures[:2], false), "off: providesOff && valuesOn")
+			},
+		},
+		{
+			option: []Option{DisableProviders(), DisableValues(), ProtocolPrefix("/test")},
+			run: func(t *testing.T, dht *IpfsDHT) {
+				require.True(t,  checkFts(dht, allFeatures[4:], true), "on: provicesOff && valuesOff")
+				require.True(t,  checkFts(dht, allFeatures[:4], false), "off: provicesOff && valuesOff")
+			},
+		},
+		{
+			option: []Option{DisableValues(), ProtocolPrefix("/test")},
+			run: func(t *testing.T, dht *IpfsDHT) {
+				require.True(t, checkFts(dht, allFeatures[:2], true) && checkFts(dht, allFeatures[4:], true), "on: providesOn && valuesOff")
+				require.True(t, checkFts(dht, allFeatures[2:4], false), "off: providesOn && valuesOff")
+			},
+		},
+	}
+
+	for _, test := range tests {
+		host, err := bhost.NewHost(swarmt.GenSwarm(t, swarmt.OptDisableReuseport), new(bhost.HostOpts))
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		dht, err := New(ctx, host, test.option...)
+		require.NoError(t, err)
+
+		test.run(t, dht)
+
+		cancel()
+		host.Close()
+	}
+}
 /*
 func TestFeaturesProperlySet(t *testing.T) {
 	dht := setupDHT(context.Background(), t, false)

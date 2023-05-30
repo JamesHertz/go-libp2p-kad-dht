@@ -321,6 +321,9 @@ func makeDHT(ctx context.Context, h host.Host, cfg dhtcfg.Config) (*IpfsDHT, err
 		features:          peer.NewFeatureSet(supportedFts...),
 	}
 	dht.host.SetFeatures(supportedFts...) // set features :)
+	// mylogger.Infof("features: %v", supportedFts)
+	// mylogger.Infof("cfg.EnableProvide: %v", cfg.EnableProviders)
+	// mylogger.Infof("cfg.EnableValues: %v", cfg.EnableValues)
 
 	var maxLastSuccessfulOutboundThreshold time.Duration
 
