@@ -75,7 +75,7 @@ func TestBadMessage(t *testing.T) {
 
 	features := []peer.Feature{
 		pb.IPFS_PUT_VALUE, pb.IPFS_GET_VALUE,
-		pb.IPFS_ADD_PROVIDERS, pb.IPFS_GET_PROVIDERS,
+		pb.IPFS_DH_ADD_PROVIDERS, pb.IPFS_DH_GET_PROVIDERS,
 		pb.FIND_CLOSEST_PEERS,
 	}
 

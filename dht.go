@@ -34,6 +34,7 @@ import (
 	goprocessctx "github.com/jbenet/goprocess/context"
 	"github.com/multiformats/go-base32"
 	ma "github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multihash"
 	"go.opencensus.io/tag"
 	"go.uber.org/zap"
 )
@@ -45,7 +46,8 @@ var (
 
 	rtFreezeTimeout = 1 * time.Minute
 )
-func init(){
+
+func init() {
 	logging.SetLogLevel("new-dht", "INFO")
 }
 
@@ -72,7 +74,7 @@ const (
 	protectedBuckets = 2
 )
 
-const prefixBitLength  = 64 // default :)
+const prefixLookupBitLength = 16 // default :)
 
 type addPeerRTReq struct {
 	p         peer.ID
@@ -250,8 +252,9 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 	dht.proc.Go(dht.populatePeers)
 
 	mylogger.Info("Running my DHT")
-	mylogger.Infof("dht.features      => %v\n", dht.features.Features())
-	mylogger.Infof("dht.host.features => %v\n", dht.host.GetFeatures())
+	mylogger.Infof("dht.features      => %v", dht.features.Features())
+	mylogger.Infof("dht.host.features => %v", dht.host.GetFeatures())
+
 	return dht, nil
 }
 
@@ -288,7 +291,6 @@ func makeDHT(ctx context.Context, h host.Host, cfg dhtcfg.Config) (*IpfsDHT, err
 
 	supportedFts := peer.Features{pb.FIND_CLOSEST_PEERS, pb.IPFS_PING}
 	if cfg.EnableProviders {
-		// supportedFts = append(supportedFts, pb.IPFS_GET_PROVIDERS, pb.IPFS_ADD_PROVIDERS)
 		supportedFts = append(supportedFts, pb.IPFS_DH_GET_PROVIDERS, pb.IPFS_DH_ADD_PROVIDERS)
 	}
 	if cfg.EnableValues {
@@ -730,16 +732,19 @@ func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) []peer.ID {
 func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) ([]peer.ID, error) {
 	key := pmes.GetKey()
 
-	key, err := internal.DecodePrefixedKey(key)
-	if err != nil {
-		return nil, err
+
+	if pmes.GetMsgFeature() == pb.IPFS_DH_GET_PROVIDERS {
+		key, err := internal.DecodePrefixedKey(key)
+		if err != nil {
+			return nil, err
+		}
+
+		// prefix lookup
+		closer := dht.routingTable.NearestPeersToPrefix(kb.ID(string(key)), count)
+		return closer, nil
 	}
 
-	// prefix lookup
-	closer := dht.routingTable.NearestPeersToPrefix(kb.ID(string(key)), count)
-	return closer, nil
 
-	/* -extra
 	// for GET_PROVIDERS messages, or sometimes FIND_NODE messages,
 	// the message key is the hashed multihash, so don't hash it again
 	decodedMH, err := multihash.Decode(key)
@@ -752,19 +757,18 @@ func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) ([]peer.ID,
 	// non-prefixed, non double-hashed lookup
 	closer := dht.routingTable.NearestPeers(kb.ConvertKey(string(key)), count)
 	return closer, nil
-	*/
 }
 
 // betterPeersToQuery returns nearestPeersToQuery with some additional filtering
 func (dht *IpfsDHT) betterPeersToQuery(pmes *pb.Message, from peer.ID, count int) []peer.ID {
 	closer, err := dht.nearestPeersToQuery(pmes, count)
 
-//+added
+	//+added
 	if err != nil {
 		logger.Errorf("key decoding error: %w", err)
 		return nil
 	}
-//+added
+	//+added
 
 	// no node? nil
 	if closer == nil {

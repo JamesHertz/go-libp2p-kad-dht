@@ -37,9 +37,9 @@ func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 			return dht.handleGetValue
 		case pb.IPFS_PUT_VALUE:
 			return dht.handlePutValue
-		case pb.IPFS_ADD_PROVIDERS:
+		case pb.IPFS_DH_ADD_PROVIDERS:
 			return dht.handleAddProvider
-		case pb.IPFS_GET_PROVIDERS:
+		case pb.IPFS_DH_GET_PROVIDERS:
 			return dht.handleGetProviders
 		}
 	}
@@ -310,10 +310,10 @@ func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.
 	}
 
 	resp := pb.NewMessage(pmes.GetMsgFeature(), pmes.GetKey(), pmes.GetClusterLevel())
-	provsToKeys, err := dht.providerStore.GetProvidersForPrefix(ctx, key, int(prefixBitLength))
-    if err != nil {
-    	return nil, err
-    }
+	provsToKeys, err := dht.providerStore.GetProvidersForPrefix(ctx, key, int(prefixLookupBitLength))
+	if err != nil {
+		return nil, err
+	}
 
 	resp.ProviderPeersII = pb.KeyToProvsToPB(dht.host.Network(), dht.peerstore, provsToKeys)
 
@@ -354,24 +354,24 @@ func (dht *IpfsDHT) handleAddProvider(ctx context.Context, p peer.ID, pmes *pb.M
 
 	// add provider should use the address given in the message
 	/* -removed
-		pinfos := pb.PBPeersToPeerInfos(pmes.GetProviderPeers())
-		for _, pi := range pinfos {
-			if pi.ID != p {
-				// we should ignore this provider record! not from originator.
-				// (we should sign them and check signature later...)
-				logger.Debugw("received provider from wrong peer", "from", p, "peer", pi.ID)
-				continue
-			}
-
-			if len(pi.Addrs) < 1 {
-				logger.Debugw("no valid addresses for provider", "from", p)
-				continue
-			}
-
-			dht.providerStore.AddProvider(ctx, key, peer.AddrInfo{ID: p})
+	pinfos := pb.PBPeersToPeerInfos(pmes.GetProviderPeers())
+	for _, pi := range pinfos {
+		if pi.ID != p {
+			// we should ignore this provider record! not from originator.
+			// (we should sign them and check signature later...)
+			logger.Debugw("received provider from wrong peer", "from", p, "peer", pi.ID)
+			continue
 		}
+
+		if len(pi.Addrs) < 1 {
+			logger.Debugw("no valid addresses for provider", "from", p)
+			continue
+		}
+
+		dht.providerStore.AddProvider(ctx, key, peer.AddrInfo{ID: p})
+	}
 	*/
-// +added
+	// +added
 	provs := pmes.GetProviderPeersII()
 	pinfos := pb.PBPeersToAddrInfos(provs)
 	for i, pi := range pinfos {
@@ -420,7 +420,7 @@ func (dht *IpfsDHT) handleAddProvider(ctx context.Context, p peer.ID, pmes *pb.M
 	}
 
 	return nil, nil
-// +added
+	// +added
 
 }
 

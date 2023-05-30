@@ -24,11 +24,11 @@ var logger = logging.Logger("dht")
 const (
 	// new features :)
 	IPFS_DH_GET_PROVIDERS peer.Feature = "/ipfs/dh/getproviders"
-	IPFS_DH_ADD_PROVIDERS peer.Feature = "/ipfs/dh/getproviders"
+	IPFS_DH_ADD_PROVIDERS peer.Feature = "/ipfs/dh/putproviders"
 
 	// old features
-	IPFS_GET_PROVIDERS peer.Feature = "/ipfs/getproviders"
-	IPFS_ADD_PROVIDERS peer.Feature = "/ipfs/putproviders"
+	// IPFS_GET_PROVIDERS peer.Feature = "/ipfs/getproviders"
+	// IPFS_ADD_PROVIDERS peer.Feature = "/ipfs/putproviders"
 	IPFS_GET_VALUE     peer.Feature = "/ipfs/get"
 	IPFS_PUT_VALUE     peer.Feature = "/ipfs/put"
 	IPFS_PING          peer.Feature = "/ipfs/ping"
@@ -193,7 +193,7 @@ func (pm *ProtocolMessenger) GetProviders(
 		p peer.ID,
 		key []byte,
 	) ([]*peer.AddrInfo, []*peer.AddrInfo, error) {
-	pmes := NewMessage(IPFS_GET_PROVIDERS, key, 0)
+	pmes := NewMessage(IPFS_DH_GET_PROVIDERS, key, 0)
 	resp, err := pm.m.SendRequest(ctx, p, pmes)
 	if err != nil {
 		return nil, nil, err

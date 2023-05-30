@@ -2204,9 +2204,10 @@ func TestFeaturesProperlySet(t *testing.T) {
 	}
 
 	checkFts := func (dht *IpfsDHT, features peer.Features, on bool) bool {
-		fts := dht.host.GetFeatures()
+		fts  := dht.host.GetFeatures()
+		fts2 := dht.features.Features()
 	    for _, ft := range features{
-			preset := dht.features.HasFeature(ft) &&  fts.HasFeature(ft)
+			preset := fts2.HasFeature(ft) &&  fts.HasFeature(ft)
 			if on && !preset  || !on && preset {
 				return false
 			}
