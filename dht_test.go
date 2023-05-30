@@ -30,6 +30,7 @@ import (
 	test "github.com/libp2p/go-libp2p-kad-dht/internal/testing"
 	pb "github.com/libp2p/go-libp2p-kad-dht/pb"
 
+	"github.com/libp2p/go-libp2p-kad-dht/internal"
 	"github.com/ipfs/go-cid"
 	detectrace "github.com/ipfs/go-detect-race"
 	u "github.com/ipfs/go-ipfs-util"
@@ -1302,7 +1303,14 @@ func TestClientModeConnect(t *testing.T) {
 
 	c := testCaseCids[0]
 	p := peer.ID("TestPeer")
-	a.ProviderStore().AddProvider(ctx, c.Hash(), peer.AddrInfo{ID: p})
+	// a.ProviderStore().AddProvider(ctx, c.Hash(), peer.AddrInfo{ID: p}) // -removed
+//+added
+	mhHash, _ := internal.Sha256Multihash(c.Hash())
+	err := a.ProviderStore().AddProvider(ctx, mhHash[:], p)
+	if err != nil {
+		t.Fatal(err)
+	}
+//+added
 	time.Sleep(time.Millisecond * 5) // just in case...
 
 	provs, err := b.FindProviders(ctx, c)
@@ -2132,6 +2140,55 @@ func TestPreconnectedNodes(t *testing.T) {
 	require.Equal(t, h1.ID(), peers[0], "could not find peer")
 }
 
+func TestProvides_PrefixLookup(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dhts := setupDHTS(t, ctx, 4)
+	defer func() {
+		for i := 0; i < 4; i++ {
+			dhts[i].Close()
+			defer dhts[i].host.Close()
+		}
+	}()
+
+	connect(t, ctx, dhts[0], dhts[1])
+	connect(t, ctx, dhts[1], dhts[2])
+	connect(t, ctx, dhts[1], dhts[3])
+
+	for _, k := range testCaseCids {
+		logger.Debugf("announcing provider for %s", k)
+		if err := dhts[3].Provide(ctx, k, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	time.Sleep(time.Second)
+
+	n := 0
+	for i, c := range testCaseCids {
+		t.Log("searching for cid", c, i)
+		n = (n + 1) % 3
+
+		t.Logf("getting providers for %s from %d", c, n)
+		ctxT, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+		// dhts[n].prefixLength = 16 // half the hashed CID for now
+		provchan := dhts[n].FindProvidersAsync(ctxT, c, 1)
+
+		select {
+		case prov := <-provchan:
+			if prov.ID == "" {
+				t.Fatal("Got back nil provider")
+			}
+			if prov.ID != dhts[3].self {
+				t.Fatal("Got back wrong provider")
+			}
+		case <-ctxT.Done():
+			t.Fatal("Did not get a provider back.")
+		}
+	}
+}
 
 /*
 func TestFeaturesProperlySet(t *testing.T) {

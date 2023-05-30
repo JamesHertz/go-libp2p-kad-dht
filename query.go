@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/libp2p/go-libp2p-kad-dht/qpeerset"
+	"github.com/multiformats/go-multihash"
 	kb "github.com/libp2p/go-libp2p-kbucket"
 )
 
@@ -148,8 +149,29 @@ processFollowUp:
 
 func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn, stopFn stopFn) (*lookupWithFollowupResult, error) {
 	// pick the K closest peers to the key in our Routing table.
+	/* -removed
 	targetKadID := kb.ConvertKey(target)
 	seedPeers := dht.routingTable.NearestPeers(targetKadID, dht.bucketSize) // TODO: think about this ...
+	*/
+//+added
+	var (
+		targetKadID []byte
+		isHashed    bool
+	)
+	
+	decodedMH, err := multihash.Decode([]byte(target))
+	if err != nil || decodedMH.Code != multihash.DBL_SHA2_256 {
+		// the target isn't a double hash, so hash it again
+		targetKadID = kb.ConvertKey(target)
+	} else if decodedMH.Code == multihash.DBL_SHA2_256 {
+		// the target is a double hash, so use the 32-byte digest
+		targetKadID = kb.ID(decodedMH.Digest)
+		isHashed = true
+	}
+	
+	seedPeers := dht.routingTable.NearestPeers(targetKadID, dht.bucketSize)
+
+//+added
 	if len(seedPeers) == 0 {
 		routing.PublishQueryEvent(ctx, &routing.QueryEvent{
 			Type:  routing.QueryError,
@@ -157,13 +179,24 @@ func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn
 		})
 		return nil, kb.ErrLookupFailure
 	}
+//+added
+	var qpset *qpeerset.QueryPeerset
+	if isHashed {
+		var hash [32]byte
+		copy(hash[:], targetKadID)
+		qpset = qpeerset.NewQueryPeersetFromHash(hash)
+	} else {
+		qpset = qpeerset.NewQueryPeerset(target)
+	}
+//+added
 
 	q := &query{
 		id:         uuid.New(),
 		key:        target,
 		ctx:        ctx,
 		dht:        dht,
-		queryPeers: qpeerset.NewQueryPeerset(target),
+		// queryPeers: qpeerset.NewQueryPeerset(target), //-removed
+		queryPeers: qpset, // +added
 		seedPeers:  seedPeers,
 		peerTimes:  make(map[peer.ID]time.Duration),
 		terminated: false,
@@ -392,7 +425,9 @@ func (q *query) terminate(ctx context.Context, cancel context.CancelFunc, reason
 // queryPeer does not access the query state in queryPeers!
 func (q *query) queryPeer(ctx context.Context, ch chan<- *queryUpdate, p peer.ID) {
 	defer q.waitGroup.Done()
-	dialCtx, queryCtx := ctx, ctx
+	// dialCtx, queryCtx := ctx, ctx //-removed
+	dialCtx, queryCtx := ctx, q.ctx //+added
+
 
 	// dial the peer
 	if err := q.dht.dialPeer(dialCtx, p); err != nil {

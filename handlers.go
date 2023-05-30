@@ -381,7 +381,8 @@ func (dht *IpfsDHT) handleAddProvider(ctx context.Context, p peer.ID, pmes *pb.M
 		}
 
 		sig := provs[i].Signature
-		pub, err := crypto.PublicKeyFromProto(provs[i].PublicKey)
+		pub, err := crypto.UnmarshalPublicKey(provs[i].PublicKey) //+added
+		// pub, err := crypto.PublicKeyFromProto(provs[i].PublicKey) //-removed
 		if err != nil {
 			logger.Debugw("failed to unmarshal public key", "from", p, "peer", pi.ID, "error", err)
 			continue

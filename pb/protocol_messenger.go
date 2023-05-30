@@ -168,7 +168,10 @@ func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key mul
 	}
 
 	pubKey := host.Peerstore().PubKey(host.ID())
-	pbPubKey, err := crypto.PublicKeyToProto(pubKey)
+	// TODO: an method for pbPubKey.Marshall()
+	pbPubKey, err := crypto.MarshalPublicKey(pubKey)
+	// pbPubKey, err := crypto.PublicKeyToProto(pubKey)
+	// bytesPubKey, err := crypto.MarshalPublicKey(pubKey)
 	if err != nil {
 		return err
 	}

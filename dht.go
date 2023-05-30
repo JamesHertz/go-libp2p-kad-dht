@@ -288,7 +288,8 @@ func makeDHT(ctx context.Context, h host.Host, cfg dhtcfg.Config) (*IpfsDHT, err
 
 	supportedFts := peer.Features{pb.FIND_CLOSEST_PEERS, pb.IPFS_PING}
 	if cfg.EnableProviders {
-		supportedFts = append(supportedFts, pb.IPFS_GET_PROVIDERS, pb.IPFS_ADD_PROVIDERS)
+		// supportedFts = append(supportedFts, pb.IPFS_GET_PROVIDERS, pb.IPFS_ADD_PROVIDERS)
+		supportedFts = append(supportedFts, pb.IPFS_DH_GET_PROVIDERS, pb.IPFS_DH_ADD_PROVIDERS)
 	}
 	if cfg.EnableValues {
 		supportedFts = append(supportedFts, pb.IPFS_GET_VALUE, pb.IPFS_PUT_VALUE)
@@ -364,7 +365,8 @@ func makeDHT(ctx context.Context, h host.Host, cfg dhtcfg.Config) (*IpfsDHT, err
 	if cfg.ProviderStore != nil {
 		dht.providerStore = cfg.ProviderStore
 	} else {
-		dht.providerStore, err = providers.NewProviderManager(dht.ctx, h.ID(), dht.peerstore, cfg.Datastore)
+		// dht.providerStore, err = providers.NewProviderManager(dht.ctx, h.ID(), dht.peerstore, cfg.Datastore) // -removed
+		dht.providerStore, err = providers.NewProviderManager(dht.ctx, h.ID(), cfg.Datastore) //+added
 		if err != nil {
 			return nil, fmt.Errorf("initializing default provider manager (%v)", err)
 		}
@@ -713,15 +715,53 @@ func (dht *IpfsDHT) FindLocal(id peer.ID) peer.AddrInfo {
 	}
 }
 
+/* -removed
 // nearestPeersToQuery returns the routing tables closest peers.
 func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) []peer.ID {
 	closer := dht.routingTable.NearestPeers(kb.ConvertKey(string(pmes.GetKey())), count)
 	return closer
 }
+*/
+
+// nearestPeersToQuery returns the routing tables closest peers.Digest
+func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) ([]peer.ID, error) {
+	key := pmes.GetKey()
+
+	key, err := internal.DecodePrefixedKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	// prefix lookup
+	closer := dht.routingTable.NearestPeersToPrefix(kb.ID(string(key)), count)
+	return closer, nil
+
+	/* -extra
+	// for GET_PROVIDERS messages, or sometimes FIND_NODE messages,
+	// the message key is the hashed multihash, so don't hash it again
+	decodedMH, err := multihash.Decode(key)
+	if err == nil && decodedMH.Code == multihash.DBL_SHA2_256 {
+		// normal non-prefixed lookup
+		closer := dht.routingTable.NearestPeers(kb.ID(string(decodedMH.Digest)), count)
+		return closer, nil
+	}
+
+	// non-prefixed, non double-hashed lookup
+	closer := dht.routingTable.NearestPeers(kb.ConvertKey(string(key)), count)
+	return closer, nil
+	*/
+}
 
 // betterPeersToQuery returns nearestPeersToQuery with some additional filtering
 func (dht *IpfsDHT) betterPeersToQuery(pmes *pb.Message, from peer.ID, count int) []peer.ID {
-	closer := dht.nearestPeersToQuery(pmes, count)
+	closer, err := dht.nearestPeersToQuery(pmes, count)
+
+//+added
+	if err != nil {
+		logger.Errorf("key decoding error: %w", err)
+		return nil
+	}
+//+added
 
 	// no node? nil
 	if closer == nil {
