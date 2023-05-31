@@ -37,10 +37,19 @@ func (dht *IpfsDHT) handlerForMsgType(t peer.Feature) dhtHandler {
 			return dht.handleGetValue
 		case pb.IPFS_PUT_VALUE:
 			return dht.handlePutValue
-		case pb.IPFS_DH_ADD_PROVIDERS:
-			return dht.handleAddProvider
-		case pb.IPFS_DH_GET_PROVIDERS:
+
+		// old features
+		case pb.IPFS_ADD_PROVIDERS:
+			return dht.handleAddProviders
+
+		case pb.IPFS_GET_PROVIDERS:
 			return dht.handleGetProviders
+
+		// new features
+		case pb.IPFS_DH_ADD_PROVIDERS:
+			return dht.handleDhAddProvider
+		case pb.IPFS_DH_GET_PROVIDERS:
+			return dht.handleDhGetProviders
 		}
 	}
 	return nil
@@ -301,7 +310,7 @@ func (dht *IpfsDHT) handleFindPeer(ctx context.Context, from peer.ID, pmes *pb.M
 	return resp, nil
 }
 
-func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
+func (dht *IpfsDHT) handleDhGetProviders(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
 	key := pmes.GetKey()
 	if len(key) > 80 {
 		return nil, fmt.Errorf("handleGetProviders key size too large")
@@ -342,15 +351,15 @@ func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.
 
 }
 
-func (dht *IpfsDHT) handleAddProvider(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
+func (dht *IpfsDHT) handleDhAddProvider(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
 	key := pmes.GetKey()
 	if len(key) > 80 {
-		return nil, fmt.Errorf("handleAddProvider key size too large")
+		return nil, fmt.Errorf("handleDhAddProvider key size too large")
 	} else if len(key) == 0 {
-		return nil, fmt.Errorf("handleAddProvider key is empty")
+		return nil, fmt.Errorf("handleDhAddProvider key is empty")
 	}
 
-	logger.Debugw("adding provider", "from", p, "key", internal.LoggableProviderRecordBytes(key))
+	logger.Debugw("adding DH provider", "from", p, "key", internal.LoggableProviderRecordBytes(key))
 
 	// add provider should use the address given in the message
 	/* -removed
@@ -426,4 +435,62 @@ func (dht *IpfsDHT) handleAddProvider(ctx context.Context, p peer.ID, pmes *pb.M
 
 func convertToDsKey(s []byte) ds.Key {
 	return ds.NewKey(base32.RawStdEncoding.EncodeToString(s))
+}
+
+
+// TODO: add tests :)
+
+func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
+	key := pmes.GetKey()
+	if len(key) > 80 {
+		return nil, fmt.Errorf("handleGetProviders key size too large")
+	} else if len(key) == 0 {
+		return nil, fmt.Errorf("handleGetProviders key is empty")
+	}
+
+	logger.Debugw("adding provider", "from", p, "key", internal.LoggableProviderRecordBytes(key))
+	resp := pb.NewMessage(pmes.GetMsgFeature(), pmes.GetKey(), pmes.GetClusterLevel())
+
+    // setup providers
+    providers, err := dht.providerStore.GetProviders(ctx, key)
+    if err != nil {
+    	return nil, err
+    }
+    resp.ProviderPeers = pb.PeerIDsToPBPeers(dht.host.Network(), dht.peerstore, providers);
+
+    // Also send closer peers.
+    closer := dht.betterPeersToQuery(pmes, p, dht.bucketSize)
+    if closer != nil {
+    	// TODO: pstore.PeerInfos should move to core (=> peerstore.AddrInfos).
+    	infos := pstore.PeerInfos(dht.peerstore, closer)
+    	resp.CloserPeers = pb.PeerInfosToPBPeers(dht.host.Network(), infos)
+    }
+    return resp, nil
+}
+
+func (dht *IpfsDHT) handleAddProviders(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
+	key := pmes.GetKey()
+	if len(key) > 80 {
+		return nil, fmt.Errorf("handleAddProviders key size too large")
+	} else if len(key) == 0 {
+		return nil, fmt.Errorf("handleAddProviders key is empty")
+	}
+
+	pinfos := pb.PBPeersToPeerInfos(pmes.GetProviderPeers())
+	for _, pi := range pinfos {
+		if pi.ID != p {
+			// we should ignore this provider record! not from originator.
+			// (we should sign them and check signature later...)
+			logger.Debugw("received provider from wrong peer", "from", p, "peer", pi.ID)
+			continue
+		}
+
+		if len(pi.Addrs) < 1 {
+			logger.Debugw("no valid addresses for provider", "from", p)
+			continue
+		}
+
+		dht.providerStore.AddProvider(ctx, key, p)
+	}
+	return nil, nil
 }
