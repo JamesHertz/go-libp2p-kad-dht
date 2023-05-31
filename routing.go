@@ -387,7 +387,7 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 		return fmt.Errorf("invalid cid: undefined")
 	}
 	keyMH := key.Hash()
-	logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
+	// logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
 
 	// add self locally
 	// dht.providerStore.AddProvider(ctx, keyMH, peer.AddrInfo{ID: dht.self}) -- removed
@@ -502,6 +502,7 @@ func (dht *IpfsDHT) FindProvidersAsync(ctx context.Context, key cid.Cid, count i
 		return peerOut
 	}
 
+	mylogger.Infof("looking for providers of: %v", key)
 	chSize := count
 	if count == 0 {
 		chSize = 1
@@ -510,6 +511,7 @@ func (dht *IpfsDHT) FindProvidersAsync(ctx context.Context, key cid.Cid, count i
 
 	keyMH := key.Hash()
 
+	mylogger.Infof("hash digest of the key: %v", key)
 	logger.Debugw("finding providers", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
 	go dht.findProvidersAsyncRoutine(ctx, keyMH, count, peerOut)
 	return peerOut
@@ -531,6 +533,7 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 	extraBitLength := extraByteLength * 8
 	logger.Debugw("finding providers", "cid", key, "mhHash", mhHash, "mh", internal.LoggableProviderRecordBytes(key))
 
+	mylogger.Infof("hash the of the key: %v", mhHash)
 	ps := make(map[peer.ID]struct{})
 // +added
 
@@ -566,11 +569,13 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 	}
 
 	decKey := enc.MultihashToKey(key) // +added
+	mylogger.Infof("decKey: %v", decKey)
 	for _, p := range provs {
-		//+added
+//+added
 		logger.Infof("got provider from local store: %x", p)
 		// decrypt peer record if needed
 		if len(p) == encryptedPeerIDLength {
+			mylogger.Info("encrypted peerID: %v", p)
 			ptPeer, err := enc.DecryptAES([]byte(p), decKey)
 			if err != nil {
 				logger.Errorf("failed to decrypt encrypted peer ID: %s", err)
@@ -578,7 +583,8 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 				continue
 			}
 			p = peer.ID(ptPeer)
-			//+added
+			mylogger.Info("decrypted peerID : %v", p)
+//+added
 		}
 
 		// NOTE: Assuming that this list of peers is unique
@@ -600,10 +606,11 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 	}
 
 	// lookupRes, err := dht.runLookupWithFollowup(ctx, string(key), // -removed
-	// +added
+// +added
 	// note: extra bits are added b/c of the multihash code + digest length
 	lookupKey := internal.PrefixByBits(mhHash, prefixLength+extraBitLength)
 
+	mylogger.Info("going for lookup")
 	runLookupWithFollowupCalls := 0
 	lookupRes, err := dht.runLookupWithFollowup(ctx, string(mhHash), // +added
 		func(ctx context.Context, p peer.ID) ([]*peer.AddrInfo, error) {
@@ -616,7 +623,8 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 
 			// provs, closest, err := dht.protoMessenger.GetProviders(ctx, p, key) // -removed
 
-			//+added
+//+added
+/*
 			var (
 				provs  []*peer.AddrInfo
 				closer []*peer.AddrInfo
@@ -627,7 +635,9 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 			} else {
 				provs, closer, err = dht.protoMessenger.GetProvidersByPrefix(ctx, p, lookupKey, mhHash) //, prefixLength+extraBitLength) (look at this)
 			}
-			//+added
+*/
+			provs, closer, err := dht.protoMessenger.GetProvidersByPrefix(ctx, p, lookupKey, mhHash) //, prefixLength+extraBitLength) (look at this)
+//+added
 			if err != nil {
 				return nil, err
 			}
@@ -637,17 +647,19 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 
 			// Add unique providers from request, up to 'count'
 			for _, prov := range provs {
-				//+added
+//+added
 				// decrypt peer record if needed
 				if len(prov.ID) == encryptedPeerIDLength {
+					mylogger.Info("encrypted peerID: %v", prov.ID)
 					ptPeer, err := enc.DecryptAES([]byte(prov.ID), decKey)
 					if err != nil {
 						logger.Errorf("failed to decrypt encrypted peer ID: %s", err)
 						continue
 					}
 					prov.ID = peer.ID(ptPeer)
+					mylogger.Info("dencrypted peerID: %v", prov.ID)
 				}
-				//+added
+//+added
 
 				dht.maybeAddAddrs(prov.ID, prov.Addrs, peerstore.TempAddrTTL)
 				logger.Debugf("got provider: %s", prov)

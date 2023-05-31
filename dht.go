@@ -251,9 +251,9 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 
 	dht.proc.Go(dht.populatePeers)
 
-	mylogger.Info("Running my DHT")
-	mylogger.Infof("dht.features      => %v", dht.features.Features())
-	mylogger.Infof("dht.host.features => %v", dht.host.GetFeatures())
+	// fmt.Printf("Running my DHT (version: %s)\n", Version)
+	// fmt.Printf("dht.features      => %v\n", dht.features.Features())
+	// fmt.Printf("dht.host.features => %v\n", dht.host.GetFeatures())
 
 	return dht, nil
 }

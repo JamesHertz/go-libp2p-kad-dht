@@ -9,4 +9,5 @@ var (
 	ProtocolDHT protocol.ID = "/ipfs/kad/1.0.0"
 	// DefaultProtocols spoken by the DHT.
 	DefaultProtocols = []protocol.ID{ProtocolDHT}
+	// Version = "0.22.1-enc"
 )
