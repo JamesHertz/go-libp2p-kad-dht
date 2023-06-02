@@ -57,3 +57,10 @@ func (dht *IpfsDHT) GetClosestPeers(ctx context.Context, key string) ([]peer.ID,
 
 	return lookupRes.peers, ctx.Err()
 }
+
+/*
+
+func (dht *IpfsDHT) GetClosestPeersWithFeature(ctx context.Context, key string, feature peer.Feature) ([]peer.ID, error) {
+	return nil, nil
+}
+*/

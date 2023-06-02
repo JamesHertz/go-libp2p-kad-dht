@@ -476,6 +476,8 @@ func (dht *IpfsDHT) handleAddProviders(ctx context.Context, p peer.ID, pmes *pb.
 		return nil, fmt.Errorf("handleAddProviders key is empty")
 	}
 
+	logger.Debugw("adding provider", "from", p, "key", internal.LoggableProviderRecordBytes(key))
+
 	pinfos := pb.PBPeersToPeerInfos(pmes.GetProviderPeers())
 	for _, pi := range pinfos {
 		if pi.ID != p {
