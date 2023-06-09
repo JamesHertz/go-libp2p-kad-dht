@@ -1564,9 +1564,11 @@ func TestProvideDisabled(t *testing.T) {
 
 			connect(t, ctx, dhtA, dhtB)
 
+			t.Logf("b-features: %v", dhtB.features.Features())
+			t.Logf("a-features: %v", dhtA.features.Features())
 			err := dhtB.Provide(ctx, k, true)
 			if enabledB {
-				if err != nil {
+				if err != nil  {
 					t.Fatal("put should have succeeded on node B", err)
 				}
 			} else {

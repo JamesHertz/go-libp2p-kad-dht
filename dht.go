@@ -740,7 +740,7 @@ func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) ([]peer.ID,
 		}
 
 		// prefix lookup
-		closer := dht.routingTable.NearestPeersToPrefix(kb.ID(string(key)), count)
+		closer := dht.routingTable.NearestPeersToPrefix(kb.ID(string(key)), count, pmes.GetMsgFeature())
 		return closer, nil
 	}
 

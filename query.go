@@ -67,11 +67,29 @@ type query struct {
 type lookupWithFollowupResult struct {
 	peers []peer.ID            // the top K not unreachable peers at the end of the query
 	state []qpeerset.PeerState // the peer states at the end of the query
-	// features []peer.FeatureList
+	features []peer.Features
 
 	// indicates that neither the lookup nor the followup has been prematurely terminated by an external condition such
 	// as context cancellation or the stop function being called.
 	completed bool
+}
+
+// filter the final result to contain only peers that supports the queried feature
+func (lp *lookupWithFollowupResult) filter(fts peer.Features) *lookupWithFollowupResult{
+	res := lookupWithFollowupResult{
+		peers: []peer.ID{},
+		state: []qpeerset.PeerState{},
+		//features: []peer.Features
+		completed: lp.completed,
+	}
+
+	for i, pfts := range lp.features{
+		if pfts.HasFeatures(fts...){
+			res.peers = append(res.peers, lp.peers[i])
+			res.state = append(res.state, lp.state[i])
+		}
+	}
+	return &res
 }
 
 // runLookupWithFollowup executes the lookup on the target using the given query function and stopping when either the
@@ -100,13 +118,13 @@ func (dht *IpfsDHT) runLookupWithFollowup(ctx context.Context, target string, qu
 	}
 
 	if len(queryPeers) == 0 {
-		return lookupRes, nil
+		return lookupRes.filter(fts), nil
 	}
 
 	// return if the lookup has been externally stopped
 	if ctx.Err() != nil || stopFn() {
 		lookupRes.completed = false
-		return lookupRes, nil
+		return lookupRes.filter(fts), nil
 	}
 
 	doneCh := make(chan struct{}, len(queryPeers))
@@ -147,7 +165,7 @@ processFollowUp:
 		}
 	}
 
-	return lookupRes, nil
+	return lookupRes.filter(fts), nil
 }
 
 func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn, stopFn stopFn, fts ...peer.Feature) (*lookupWithFollowupResult, error) {
@@ -168,6 +186,13 @@ func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn
 	}
 	
 	seedPeers := dht.routingTable.NearestPeers(targetKadID, dht.bucketSize, fts...)
+
+	if len(seedPeers) == 0 {
+		// if no peer in the routing table was found that supports our feature
+		// lets try to find it anyways. This can go wrong if we are running looking
+		// for providers because these peers ain't gonna replay the IPFS_GET_DHT_PROVIDERS RPC
+		seedPeers = dht.routingTable.NearestPeers(targetKadID, dht.bucketSize) 
+	}
 
 	if len(seedPeers) == 0 {
 		routing.PublishQueryEvent(ctx, &routing.QueryEvent{
@@ -248,17 +273,22 @@ func (q *query) constructLookupResult(target kb.ID) *lookupWithFollowupResult {
 		completed = false
 	}
 
+	// helper :)
+	type peerinfo struct {
+		state qpeerset.PeerState
+		fts   peer.Features
+	}
+
 	// extract the top K not unreachable peers
 	var peers []peer.ID
-	peerState := make(map[peer.ID]qpeerset.PeerState)
+	peerState := make(map[peer.ID]peerinfo)
 	qp := q.queryPeers.GetClosestNInStates(q.dht.bucketSize, qpeerset.PeerHeard, qpeerset.PeerWaiting, qpeerset.PeerQueried)
 	for _, p := range qp {
-		fts := q.queryPeers.GetFeatures(p)
-		if fts.HasFeatures(q.lookUpFeatures...){ // filter to what we need :)
-			state := q.queryPeers.GetState(p)
-			peerState[p] = state
-			peers = append(peers, p)
+		peerState[p] = peerinfo{
+			state: q.queryPeers.GetState(p),
+			fts:   q.queryPeers.GetFeatures(p),
 		}
+		peers = append(peers, p)
 	}
 
 	// get the top K overall peers
@@ -271,11 +301,13 @@ func (q *query) constructLookupResult(target kb.ID) *lookupWithFollowupResult {
 	res := &lookupWithFollowupResult{
 		peers:     sortedPeers,
 		state:     make([]qpeerset.PeerState, len(sortedPeers)),
+		features:  make([]peer.Features, len(sortedPeers)),
 		completed: completed,
 	}
 
 	for i, p := range sortedPeers {
-		res.state[i] = peerState[p]
+		res.state[i]    = peerState[p].state
+		res.features[i] = peerState[p].fts
 	}
 
 	return res
