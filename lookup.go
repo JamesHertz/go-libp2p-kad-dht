@@ -12,7 +12,7 @@ import (
 )
 
 // GetClosestPeers is a Kademlia 'node lookup' operation. Returns a channel of
-// the K closest peers to the given key.
+// the K closest peers to the given key (supporting all a set of features fts which can be empty).
 //
 // If the context is canceled, this function will return the context error along
 // with the closest K peers it has found so far.

@@ -291,7 +291,12 @@ func makeDHT(ctx context.Context, h host.Host, cfg dhtcfg.Config) (*IpfsDHT, err
 
 	supportedFts := peer.Features{pb.FIND_CLOSEST_PEERS, pb.IPFS_PING}
 	if cfg.EnableProviders {
-		supportedFts = append(supportedFts, pb.IPFS_DH_GET_PROVIDERS, pb.IPFS_DH_ADD_PROVIDERS)
+		supportedFts = append( supportedFts, 
+			// new providers features
+			pb.IPFS_DH_GET_PROVIDERS, pb.IPFS_DH_ADD_PROVIDERS, 
+			// old providers features
+			pb.IPFS_ADD_PROVIDERS, pb.IPFS_GET_PROVIDERS,
+		)
 	}
 	if cfg.EnableValues {
 		supportedFts = append(supportedFts, pb.IPFS_GET_VALUE, pb.IPFS_PUT_VALUE)
