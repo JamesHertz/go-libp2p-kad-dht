@@ -24,6 +24,7 @@ var ErrNoPeersQueried = errors.New("failed to query any peers")
 
 type queryFn func(context.Context, peer.ID) ([]*peer.AddrInfo, error)
 type stopFn func() bool
+type filterFn func(peer.ID) bool
 
 // query represents a single DHT query.
 type query struct {
@@ -59,6 +60,8 @@ type query struct {
 
 	// stopFn is used to determine if we should stop the WHOLE disjoint query.
 	stopFn stopFn
+
+	lookingForFeatures bool
 }
 
 type lookupWithFollowupResult struct {
@@ -78,9 +81,9 @@ type lookupWithFollowupResult struct {
 //
 // After the lookup is complete the query function is run (unless stopped) against all of the top K peers from the
 // lookup that have not already been successfully queried.
-func (dht *IpfsDHT) runLookupWithFollowup(ctx context.Context, target string, queryFn queryFn, stopFn stopFn) (*lookupWithFollowupResult, error) {
+func (dht *IpfsDHT) runLookupWithFollowup(ctx context.Context, target string, queryFn queryFn, stopFn stopFn, fts ...peer.Feature) (*lookupWithFollowupResult, error) {
 	// run the query
-	lookupRes, err := dht.runQuery(ctx, target, queryFn, stopFn)
+	lookupRes, err := dht.runQuery(ctx, target, queryFn, stopFn, fts...)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +150,7 @@ processFollowUp:
 	return lookupRes, nil
 }
 
-func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn, stopFn stopFn) (*lookupWithFollowupResult, error) {
+func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn, stopFn stopFn, fts ...peer.Feature) (*lookupWithFollowupResult, error) {
 	// pick the K closest peers to the key in our Routing table.
 	/* -removed
 	targetKadID := kb.ConvertKey(target)
@@ -169,7 +172,7 @@ func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn
 		isHashed = true
 	}
 	
-	seedPeers := dht.routingTable.NearestPeers(targetKadID, dht.bucketSize)
+	seedPeers := dht.routingTable.NearestPeers(targetKadID, dht.bucketSize, fts...)
 
 //+added
 	if len(seedPeers) == 0 {
@@ -202,6 +205,7 @@ func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn
 		terminated: false,
 		queryFn:    queryFn,
 		stopFn:     stopFn,
+		lookingForFeatures: len(fts) > 0,
 	}
 
 	// run the query
@@ -283,12 +287,18 @@ func (q *query) constructLookupResult(target kb.ID) *lookupWithFollowupResult {
 	return res
 }
 
+type heardInfo struct {
+	pid peer.ID
+	fts  peer.Features
+}
+
 type queryUpdate struct {
 	cause       peer.ID
 	queried     []peer.ID
 	heard       []peer.ID
-	unreachable []peer.ID
+	heard_fts   []peer.Features
 
+	unreachable []peer.ID
 	queryDuration time.Duration
 }
 
@@ -456,7 +466,8 @@ func (q *query) queryPeer(ctx context.Context, ch chan<- *queryUpdate, p peer.ID
 	q.dht.peerFound(q.dht.ctx, p, true)
 
 	// process new peers
-	saw := []peer.ID{}
+	saw     := []peer.ID{} // todo should I?
+	saw_fts := []peer.Features{}
 	for _, next := range newPeers {
 		if next.ID == q.dht.self { // don't add self.
 			logger.Debugf("PEERS CLOSER -- worker for: %v found self", p)
@@ -474,11 +485,12 @@ func (q *query) queryPeer(ctx context.Context, ch chan<- *queryUpdate, p peer.ID
 		isTarget := string(next.ID) == q.key
 		if isTarget || q.dht.queryPeerFilter(q.dht, *next) {
 			q.dht.maybeAddAddrs(next.ID, next.Addrs, pstore.TempAddrTTL)
-			saw = append(saw, next.ID)
+			saw     = append(saw, next.ID)
+			saw_fts = append(saw_fts, next.Features)
 		}
 	}
 
-	ch <- &queryUpdate{cause: p, heard: saw, queried: []peer.ID{p}, queryDuration: queryDuration}
+	ch <- &queryUpdate{cause: p, heard: saw, heard_fts: saw_fts, queried: []peer.ID{p}, queryDuration: queryDuration}
 }
 
 func (q *query) updateState(ctx context.Context, up *queryUpdate) {
@@ -502,11 +514,19 @@ func (q *query) updateState(ctx context.Context, up *queryUpdate) {
 			nil,
 		),
 	)
-	for _, p := range up.heard {
+	for i, p := range up.heard {
 		if p == q.dht.self { // don't add self.
 			continue
 		}
-		q.queryPeers.TryAdd(p, up.cause)
+
+		var fts peer.Features
+		if up.heard_fts == nil { // they are local peers
+			fts = q.dht.Host().Peerstore().Features(p)
+		} else {
+			fts = up.heard_fts[i]
+		}
+
+		q.queryPeers.TryAdd(p, up.cause, fts, q.calcFeatureDistance(fts))
 	}
 	for _, p := range up.queried {
 		if p == q.dht.self { // don't add self.
@@ -557,4 +577,15 @@ func (dht *IpfsDHT) dialPeer(ctx context.Context, p peer.ID) error {
 	}
 	logger.Debugf("connected. dial success.")
 	return nil
+}
+
+
+// remove this later :)
+func (q * query) calcFeatureDistance(fts peer.Features) int{
+	if !q.lookingForFeatures{
+		return 0
+	}
+
+	fs := q.dht.features
+	return fs.MaxFeatureScore() - fs.FeatureScore(fts)
 }

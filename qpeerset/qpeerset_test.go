@@ -49,13 +49,13 @@ func TestQPeerSet(t *testing.T) {
 	require.Equal(t, -1, qp.find(peer2))
 
 	// add peer2,assert state & then another add fails
-	require.True(t, qp.TryAdd(peer2, oracle))
+	require.True(t, qp.TryAdd(peer2, oracle, nil, 0))
 	require.Equal(t, PeerHeard, qp.GetState(peer2))
-	require.False(t, qp.TryAdd(peer2, oracle))
+	require.False(t, qp.TryAdd(peer2, oracle, nil, 0))
 	require.Equal(t, 0, qp.NumWaiting())
 
 	// add peer4
-	require.True(t, qp.TryAdd(peer4, oracle))
+	require.True(t, qp.TryAdd(peer4, oracle, nil, 0))
 	cl := qp.GetClosestNInStates(2, PeerHeard, PeerWaiting, PeerQueried)
 	require.Equal(t, []peer.ID{peer4, peer2}, cl)
 	cl = qp.GetClosestNInStates(3, PeerHeard, PeerWaiting, PeerQueried)
@@ -69,7 +69,7 @@ func TestQPeerSet(t *testing.T) {
 	require.Equal(t, []peer.ID{peer2}, cl)
 
 	// add peer1
-	require.True(t, qp.TryAdd(peer1, oracle))
+	require.True(t, qp.TryAdd(peer1, oracle, nil, 0))
 	cl = qp.GetClosestNInStates(1, PeerHeard, PeerWaiting, PeerQueried)
 	require.Equal(t, []peer.ID{peer1}, cl)
 	cl = qp.GetClosestNInStates(2, PeerHeard, PeerWaiting, PeerQueried)
@@ -80,7 +80,43 @@ func TestQPeerSet(t *testing.T) {
 	require.Equal(t, []peer.ID{peer2}, qp.GetClosestInStates(PeerWaiting))
 
 	require.Equal(t, []peer.ID{peer1}, qp.GetClosestInStates(PeerHeard))
-	require.True(t, qp.TryAdd(peer3, oracle))
+	require.True(t, qp.TryAdd(peer3, oracle, nil, 0))
 	require.Equal(t, []peer.ID{peer3, peer1}, qp.GetClosestInStates(PeerHeard))
 	require.Equal(t, 2, qp.NumHeard())
+}
+
+
+func TestNewQSetFeatures(t *testing.T) {
+	const total = 100
+	const wnt   = 10
+
+	key := "mykey"
+	qp  := NewQueryPeerset(key)
+	wanted := make(map[peer.ID]struct{}, 5)
+	parent := test.RandPeerIDFatal(t)
+
+	for i := 0; i < total ; i++ {
+		dist := 1
+		pid  :=test.RandPeerIDFatal(t)
+		if i < wnt {
+			dist = 0
+			wanted[pid] = struct{}{}
+		}
+		qp.TryAdd(pid, parent, nil, dist)
+	}
+
+	peers := qp.GetClosestInStates(PeerHeard)
+	require.True(t, len(peers) > 0)
+
+	for i, p := range peers {
+		if i < wnt {
+			_, ok := wanted[p]
+			require.True(t, ok)
+		}
+
+		if i > 0 && i != wnt {
+			last := peers[i-1]
+			require.True(t, p == last || kb.Closer(last, p, key))
+		}
+	}
 }

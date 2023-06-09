@@ -39,10 +39,13 @@ type QueryPeerset struct {
 type queryPeerState struct {
 	id         peer.ID
 	distance   *big.Int
+	ftDistance int
 	state      PeerState
+	fts        peer.Features
 	referredBy peer.ID
 }
 
+// TODO: look at this :)
 type sortedQueryPeerset QueryPeerset
 
 func (sqp *sortedQueryPeerset) Len() int {
@@ -54,8 +57,14 @@ func (sqp *sortedQueryPeerset) Swap(i, j int) {
 }
 
 func (sqp *sortedQueryPeerset) Less(i, j int) bool {
-	di, dj := sqp.all[i].distance, sqp.all[j].distance
+	st1  := sqp.all[i]
+	st2  := sqp.all[j]
+	diff := st1.ftDistance - st2.ftDistance
+	return diff < 0 || diff == 0 && st1.distance.Cmp(st2.distance) == -1 
+/*
+	di, dj := st1.distance, st2.distance
 	return di.Cmp(dj) == -1
+*/
 }
 
 // NewQueryPeerset creates a new empty set of peers.
@@ -78,19 +87,28 @@ func (qp *QueryPeerset) find(p peer.ID) int {
 }
 
 func (qp *QueryPeerset) distanceToKey(p peer.ID) *big.Int {
-	return ks.XORKeySpace.Key([]byte(p)).Distance(qp.key)
+	return ks.XORKeySpace.Key([]byte(p)).Distance(qp.key) // todo: change over here :)
 }
 
 // TryAdd adds the peer p to the peer set.
 // If the peer is already present, no action is taken.
 // Otherwise, the peer is added with state set to PeerHeard.
 // TryAdd returns true iff the peer was not already present.
-func (qp *QueryPeerset) TryAdd(p, referredBy peer.ID) bool {
+func (qp *QueryPeerset) TryAdd(p, referredBy peer.ID, fts peer.Features, featureDistance int) bool {
 	if qp.find(p) >= 0 {
 		return false
 	} else {
-		qp.all = append(qp.all,
-			queryPeerState{id: p, distance: qp.distanceToKey(p), state: PeerHeard, referredBy: referredBy})
+		qp.all = append(qp.all, queryPeerState{
+				id: p, 
+				distance:  
+				qp.distanceToKey(p), 
+				state: PeerHeard, 
+				referredBy: 
+				referredBy, 
+				fts: fts,
+				ftDistance: featureDistance,
+		})
+
 		qp.sorted = false
 		return true
 	}
@@ -120,6 +138,11 @@ func (qp *QueryPeerset) GetState(p peer.ID) PeerState {
 // If p is not in the peerset, GetReferrer panics.
 func (qp *QueryPeerset) GetReferrer(p peer.ID) peer.ID {
 	return qp.all[qp.find(p)].referredBy
+}
+
+// GetFeatures of this peer :)
+func (qp *QueryPeerset) GetFeatures(p peer.ID) peer.Features{
+	return qp.all[qp.find(p)].fts
 }
 
 // GetClosestNInStates returns the closest to the key peers, which are in one of the given states.

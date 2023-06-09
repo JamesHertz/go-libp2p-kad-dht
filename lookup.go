@@ -16,7 +16,7 @@ import (
 //
 // If the context is canceled, this function will return the context error along
 // with the closest K peers it has found so far.
-func (dht *IpfsDHT) GetClosestPeers(ctx context.Context, key string) ([]peer.ID, error) {
+func (dht *IpfsDHT) GetClosestPeers(ctx context.Context, key string, fts ...peer.Feature) ([]peer.ID, error) {
 	if key == "" {
 		return nil, fmt.Errorf("can't lookup empty key")
 	}
@@ -44,6 +44,7 @@ func (dht *IpfsDHT) GetClosestPeers(ctx context.Context, key string) ([]peer.ID,
 			return peers, err
 		},
 		func() bool { return false },
+		fts...
 	)
 
 	if err != nil {
@@ -57,10 +58,3 @@ func (dht *IpfsDHT) GetClosestPeers(ctx context.Context, key string) ([]peer.ID,
 
 	return lookupRes.peers, ctx.Err()
 }
-
-/*
-
-func (dht *IpfsDHT) GetClosestPeersWithFeature(ctx context.Context, key string, feature peer.Feature) ([]peer.ID, error) {
-	return nil, nil
-}
-*/
