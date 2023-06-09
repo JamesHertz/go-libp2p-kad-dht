@@ -57,7 +57,6 @@ require (
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/pprof v0.0.0-20221203041831-ce31453925ec // indirect
-	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/huin/goupnp v1.0.3 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
@@ -122,8 +121,8 @@ require (
 	nhooyr.io/websocket v1.8.7 // indirect
 )
 
-// replace github.com/libp2p/go-libp2p v0.25.1 => github.com/JamesHertz/go-libp2p v0.27.0-jhertz
-replace github.com/libp2p/go-libp2p => ../go-libp2p
+// replace github.com/libp2p/go-libp2p => ../go-libp2p
+replace github.com/libp2p/go-libp2p v0.25.1 => github.com/JamesHertz/go-libp2p v0.26.4-research
 
 // replace github.com/libp2p/go-libp2p-kbucket v0.5.0 => github.com/JamesHertz/go-libp2p-kbucket v0.5.1-research
 replace github.com/libp2p/go-libp2p-kbucket => ../go-libp2p-kbucket
