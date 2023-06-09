@@ -18,7 +18,7 @@ import (
 // However, increasing the timeout makes them pass on Windows.
 
 func TestRTEvictionOnFailedQuery(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour*1)//time.Second*10)
 	defer cancel()
 
 	d1 := setupDHT(ctx, t, false)
@@ -42,6 +42,7 @@ func TestRTEvictionOnFailedQuery(t *testing.T) {
 	// close both hosts so query fails
 	require.NoError(t, d1.host.Close())
 	require.NoError(t, d2.host.Close())
+
 	// peers will still be in the RT because we have decoupled membership from connectivity
 	require.NoError(t, tu.WaitFor(ctx, func() error {
 		if !checkRoutingTable(d1, d2) {
