@@ -2207,7 +2207,7 @@ func TestFeaturesProperlySet(t *testing.T) {
 		fts  := dht.host.GetFeatures()
 		fts2 := dht.features.Features()
 	    for _, ft := range features{
-			preset := fts2.HasFeature(ft) &&  fts.HasFeature(ft)
+			preset := fts2.HasFeatures(ft) &&  fts.HasFeatures(ft)
 			if on && !preset  || !on && preset {
 				return false
 			}

@@ -404,7 +404,7 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 	}
 
 	// add (encrypted) self locally
-	err = dht.providerStore.AddProvider(ctx, mhHash, peer.ID(ct)) // TODO: change this :)
+	err = dht.providerStore.AddProvider(ctx, mhHash, peer.ID(ct))
 	if err != nil {
 		return err
 	}

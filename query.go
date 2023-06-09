@@ -61,7 +61,7 @@ type query struct {
 	// stopFn is used to determine if we should stop the WHOLE disjoint query.
 	stopFn stopFn
 
-	lookingForFeatures bool
+	lookUpFeatures peer.Features
 }
 
 type lookupWithFollowupResult struct {
@@ -152,11 +152,6 @@ processFollowUp:
 
 func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn, stopFn stopFn, fts ...peer.Feature) (*lookupWithFollowupResult, error) {
 	// pick the K closest peers to the key in our Routing table.
-	/* -removed
-	targetKadID := kb.ConvertKey(target)
-	seedPeers := dht.routingTable.NearestPeers(targetKadID, dht.bucketSize) // TODO: think about this ...
-	*/
-//+added
 	var (
 		targetKadID []byte
 		isHashed    bool
@@ -174,7 +169,6 @@ func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn
 	
 	seedPeers := dht.routingTable.NearestPeers(targetKadID, dht.bucketSize, fts...)
 
-//+added
 	if len(seedPeers) == 0 {
 		routing.PublishQueryEvent(ctx, &routing.QueryEvent{
 			Type:  routing.QueryError,
@@ -182,7 +176,6 @@ func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn
 		})
 		return nil, kb.ErrLookupFailure
 	}
-//+added
 	var qpset *qpeerset.QueryPeerset
 	if isHashed {
 		var hash [32]byte
@@ -191,21 +184,19 @@ func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn
 	} else {
 		qpset = qpeerset.NewQueryPeerset(target)
 	}
-//+added
 
 	q := &query{
 		id:         uuid.New(),
 		key:        target,
 		ctx:        ctx,
 		dht:        dht,
-		// queryPeers: qpeerset.NewQueryPeerset(target), //-removed
 		queryPeers: qpset, // +added
 		seedPeers:  seedPeers,
 		peerTimes:  make(map[peer.ID]time.Duration),
 		terminated: false,
 		queryFn:    queryFn,
 		stopFn:     stopFn,
-		lookingForFeatures: len(fts) > 0,
+		lookUpFeatures: fts,
 	}
 
 	// run the query
@@ -262,9 +253,12 @@ func (q *query) constructLookupResult(target kb.ID) *lookupWithFollowupResult {
 	peerState := make(map[peer.ID]qpeerset.PeerState)
 	qp := q.queryPeers.GetClosestNInStates(q.dht.bucketSize, qpeerset.PeerHeard, qpeerset.PeerWaiting, qpeerset.PeerQueried)
 	for _, p := range qp {
-		state := q.queryPeers.GetState(p)
-		peerState[p] = state
-		peers = append(peers, p)
+		fts := q.queryPeers.GetFeatures(p)
+		if fts.HasFeatures(q.lookUpFeatures...){ // filter to what we need :)
+			state := q.queryPeers.GetState(p)
+			peerState[p] = state
+			peers = append(peers, p)
+		}
 	}
 
 	// get the top K overall peers
@@ -582,7 +576,7 @@ func (dht *IpfsDHT) dialPeer(ctx context.Context, p peer.ID) error {
 
 // remove this later :)
 func (q * query) calcFeatureDistance(fts peer.Features) int{
-	if !q.lookingForFeatures{
+	if len(q.lookUpFeatures) == 0 {
 		return 0
 	}
 

@@ -18,7 +18,7 @@ import (
 // However, increasing the timeout makes them pass on Windows.
 
 func TestRTEvictionOnFailedQuery(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Hour*1)//time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	d1 := setupDHT(ctx, t, false)
