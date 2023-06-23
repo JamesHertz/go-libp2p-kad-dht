@@ -41,6 +41,10 @@ git.apache.org/thrift.git v0.0.0-20180902110319-2566ecd5d999/go.mod h1:fPE2ZNJGy
 github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
+github.com/JamesHertz/go-libp2p v0.26.4-research h1:8DvhXcQEFBcBrHEOING6Ibfvy5cmANTYRscAK5eRh8M=
+github.com/JamesHertz/go-libp2p v0.26.4-research/go.mod h1:x75BN32YbwuY0Awm2Uix4d4KOz+/4piInkp4Wr3yOo8=
+github.com/JamesHertz/go-libp2p-kbucket v0.5.1-research-v2 h1:CRKS5LeU0P26WTx5zkw3ZEw0T21PJPXMcjWWLVFowtM=
+github.com/JamesHertz/go-libp2p-kbucket v0.5.1-research-v2/go.mod h1:dxtO7JCk5o3Pkp6jJUwQ7BOGZL4nQIn7lP3IEHpShr0=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
