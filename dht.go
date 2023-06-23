@@ -251,10 +251,7 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 
 	dht.proc.Go(dht.populatePeers)
 
-	// fmt.Printf("Running my DHT (version: %s)\n", Version)
-	// fmt.Printf("dht.features      => %v\n", dht.features.Features())
-	// fmt.Printf("dht.host.features => %v\n", dht.host.GetFeatures())
-	fmt.Printf("\033[0;32mRunning secure DHT ( fts: %v )\033[0m", dht.features.Features());
+	fmt.Printf("\033[0;32mRunning secure DHT ( fts: %v )\n\033[0m", dht.features.Features());
 
 	return dht, nil
 }
