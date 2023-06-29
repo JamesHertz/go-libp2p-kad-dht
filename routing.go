@@ -606,7 +606,7 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 
 			// if peer doesn't support such feature don't even bother to query him :)
 			if ! dht.peerstore.HasFeatures(p, pb.IPFS_DH_GET_PROVIDERS) { 
-				return nil, nil
+				return []*peer.AddrInfo{}, nil
 			}
 
 			provs, closer, err := dht.protoMessenger.GetProvidersByPrefix(ctx, p, lookupKey, mhHash) 
