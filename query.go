@@ -190,7 +190,9 @@ func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn
 	if len(seedPeers) == 0 {
 		// if no peer in the routing table was found that supports our feature
 		// lets try to find it anyways. This can go wrong if we are running looking
-		// for providers because these peers ain't gonna replay the IPFS_GET_DHT_PROVIDERS RPC
+		// for providers because these peers ain't gonna reply the IPFS_DH_GET_PROVIDERS RPC
+		// So on the query function we should use the FeatureBook to check if the peer indeed 
+		// supports such feature (which was done)
 		seedPeers = dht.routingTable.NearestPeers(targetKadID, dht.bucketSize) 
 	}
 
