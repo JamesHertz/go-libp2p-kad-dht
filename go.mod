@@ -123,4 +123,4 @@ require (
 
 replace github.com/libp2p/go-libp2p => github.com/JamesHertz/go-libp2p v0.26.4-research
 
-replace github.com/libp2p/go-libp2p-kbucket => github.com/JamesHertz/go-libp2p-kbucket v0.5.1-research-v2
+replace github.com/libp2p/go-libp2p-kbucket => github.com/JamesHertz/go-libp2p-kbucket v0.5.1-research-v2.1
