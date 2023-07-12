@@ -401,9 +401,10 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 	)
 
 	defer func(){
-		total_time := time.Since(start_time)
+		// 
+		total_time := float64(time.Since(start_time))/float64(time.Millisecond)
 		data, _ := json.Marshal(saved)
-		provLog.Infof(`{ "cid": "%s", "time_ms": %d, "peers": %s }`, key, total_time.Milliseconds(), data)
+		provLog.Infof(`{ "cid": "%s", "time_ms": %.2f, "peers": %s }`, key, total_time, data)
 	}()
 
 
