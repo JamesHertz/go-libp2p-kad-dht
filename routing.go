@@ -3,6 +3,7 @@ package dht
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -20,7 +21,11 @@ import (
 	kb "github.com/libp2p/go-libp2p-kbucket"
 	record "github.com/libp2p/go-libp2p-record"
 	"github.com/multiformats/go-multihash"
+
+	logging "github.com/ipfs/go-log"
 )
+
+var provLog = logging.Logger("dht-exp/provide")
 
 // This file implements the Routing interface for the IpfsDHT struct.
 
@@ -376,6 +381,21 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 	} else if !key.Defined() {
 		return fmt.Errorf("invalid cid: undefined")
 	}
+
+	var (
+		start_time = time.Now()
+		lk = sync.Mutex{}
+		saved []peer.ID
+
+	)
+
+	defer func(){
+		total_time := float64(time.Since(start_time))/float64(time.Millisecond)
+		data, _ := json.Marshal(saved)
+		provLog.Infof(`{ "cid": "%s", "time_ms": %.2f, "peers": %s }`, key, total_time, data)
+	}()
+
+
 	keyMH := key.Hash()
 	logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
 
@@ -431,6 +451,10 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 			err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.host)
 			if err != nil {
 				logger.Debug(err)
+			} else {
+				lk.Lock()
+					saved = append(saved, p)
+				lk.Unlock()
 			}
 		}(p)
 	}
