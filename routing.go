@@ -3,6 +3,7 @@ package dht
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -23,6 +24,8 @@ import (
 
 	enc "github.com/libp2p/go-libp2p-kad-dht/internal/encrypt"
 	pb "github.com/libp2p/go-libp2p-kad-dht/pb"
+
+	logging "github.com/ipfs/go-log"
 )
 
 // +added
@@ -30,6 +33,8 @@ const (
 	keySize               = 32
 	encryptedPeerIDLength = 66
 )
+
+var provLog = logging.Logger("dht-exp/provide")
 
 // +added
 
@@ -387,6 +392,21 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 	} else if !key.Defined() {
 		return fmt.Errorf("invalid cid: undefined")
 	}
+
+	var (
+		start_time = time.Now()
+		lk = sync.Mutex{}
+		saved []peer.ID
+
+	)
+
+	defer func(){
+		total_time := time.Since(start_time)
+		data, _ := json.Marshal(saved)
+		provLog.Infof(`{ "cid": "%s", "time_ms": %d, "peers": %s }`, key, total_time.Milliseconds(), data)
+	}()
+
+
 	keyMH := key.Hash()
 	// logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
 
@@ -465,6 +485,10 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 
 			if err != nil {
 				logger.Debug(err)
+			} else {
+				lk.Lock()
+					saved = append(saved, p)
+				lk.Unlock()
 			}
 		}(p)
 	}
