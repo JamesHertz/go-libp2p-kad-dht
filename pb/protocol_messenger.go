@@ -204,10 +204,8 @@ func (pm *ProtocolMessenger) GetProviders(
 	closerPeers := PBPeersToPeerInfos(resp.GetCloserPeers())
 	return provs, closerPeers, nil
 }
-// +added
 
-/* -removed
-	func (pm *ProtocolMessenger) GetProviders(ctx context.Context, p peer.ID, key multihash.Multihash) ([]*peer.AddrInfo, []*peer.AddrInfo, error) { 
+func (pm *ProtocolMessenger) GetProvidersDefault(ctx context.Context, p peer.ID, key multihash.Multihash) ([]*peer.AddrInfo, []*peer.AddrInfo, error) { 
 
 	pmes := NewMessage(IPFS_GET_PROVIDERS, key, 0)
 	respMsg, err := pm.m.SendRequest(ctx, p, pmes)
@@ -218,7 +216,6 @@ func (pm *ProtocolMessenger) GetProviders(
 	closerPeers := PBPeersToPeerInfos(respMsg.GetCloserPeers())
 	return provs, closerPeers, nil
 }
-*/ 
 
 // Ping sends a ping message to the passed peer and waits for a response.
 func (pm *ProtocolMessenger) Ping(ctx context.Context, p peer.ID) error {

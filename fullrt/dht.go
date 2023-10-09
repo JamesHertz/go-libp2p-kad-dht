@@ -787,22 +787,14 @@ func (dht *FullRT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err e
 		return fmt.Errorf("invalid cid: undefined")
 	}
 	keyMH := key.Hash()
-	// logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH)) // -removed
 
-//+added
 	mhHash, _ := internal.Sha256Multihash(keyMH)
 	logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH), "mhHash", mhHash)
-//+added
 
-
-	// add self locally
-	// dht.ProviderManager.AddProvider(ctx, keyMH, peer.AddrInfo{ID: dht.h.ID()}) // -removed
-// +added
 	err = dht.ProviderManager.AddProvider(ctx, mhHash, dht.h.ID())
 	if err != nil {
 		return err
 	}
-// +added
 
 	if !brdcst {
 		return nil
@@ -1250,11 +1242,9 @@ func (dht *FullRT) FindProvidersAsync(ctx context.Context, key cid.Cid, count in
 func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.Multihash, count int, peerOut chan peer.AddrInfo) {
 	defer close(peerOut)
 
-//+added
 	// hash multihash for double-hashing implementation
 	mhHash, _ := internal.Sha256Multihash(key)
 	logger.Debugw("finding providers", "cid", key, "mhHash", mhHash, "mh", internal.LoggableProviderRecordBytes(key))
-//+added
 
 	findAll := count == 0
 	ps := make(map[peer.ID]struct{})
@@ -1275,7 +1265,6 @@ func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.
 		return len(ps)
 	}
 
-	// provs, err := dht.ProviderManager.GetProviders(ctx, key) // -removed
 	provs, err := dht.ProviderManager.GetProviders(ctx, mhHash[:]) // +added
 
 	if err != nil {
@@ -1283,7 +1272,6 @@ func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.
 	}
 	for _, p := range provs {
 		// NOTE: Assuming that this list of peers is unique
-//+added
 		addrInfo := dht.h.Peerstore().PeerInfo(p)
 		if psTryAdd(p) {
 			select {
@@ -1292,17 +1280,6 @@ func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.
  				return
  			}
 		}
-//+added
-		/* -removed
-		if psTryAdd(p.ID) {
-			select {
-			case peerOut <- p:
-			case <-ctx.Done():
-				return
-			}
-		*/
-		// If we have enough peers locally, don't bother with remote RPC
-		// TODO: is this a DOS vector?
 		if !findAll && psSize() >= count {
 			return
 		}

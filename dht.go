@@ -49,6 +49,7 @@ var (
 
 func init() {
 	logging.SetLogLevel("new-dht", "INFO")
+	logging.SetLogLevel("dht", "INFO")
 }
 
 const (
@@ -185,8 +186,6 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-
-	// h.SetFeatures(Features...) //  TODO: take into consideration enbleProviders and enableValues
 
 	dht, err := makeDHT(ctx, h, cfg)
 	if err != nil {

@@ -502,6 +502,8 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 
 // FindProviders searches until the context expires.
 func (dht *IpfsDHT) FindProviders(ctx context.Context, c cid.Cid) ([]peer.AddrInfo, error) {
+
+	// Hi there
 	if !dht.enableProviders {
 		return nil, routing.ErrNotSupported
 	} else if !c.Defined() {
@@ -546,15 +548,20 @@ func (dht *IpfsDHT) FindProvidersAsync(ctx context.Context, key cid.Cid, count i
 func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash.Multihash, count int, peerOut chan peer.AddrInfo) {
 	defer close(peerOut)
 
+	feature := pb.IPFS_DH_GET_PROVIDERS
+
+	// TODO: think of a better solution than this
+	cidtype, ok := ctx.Value("cidtype").(string)
+	if ok && cidtype == "Normal" {
+		feature = pb.IPFS_ADD_PROVIDERS
+	}
+
+	secureLookup := feature == pb.IPFS_DH_ADD_PROVIDERS
+
 	findAll := count == 0
 	prefixLength := prefixLookupBitLength
 
-	// hash multihash for double-hashing implementation
-	mhHash, extraByteLength := internal.Sha256Multihash(key)
-	extraBitLength := extraByteLength * 8
-	logger.Debugw("finding providers", "cid", key, "mhHash", mhHash, "mh", internal.LoggableProviderRecordBytes(key))
 
-	mylogger.Infof("hash the of the key: %v", mhHash)
 	ps := make(map[peer.ID]struct{})
 
 	psLock := &sync.Mutex{}
@@ -574,18 +581,40 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 		return len(ps)
 	}
 
+	var (
+		mhHash multihash.Multihash
+		decKey []byte
+		sendPeerRequest func (p peer.ID) ([]*peer.AddrInfo, []*peer.AddrInfo, error)
+	)
+
+	if secureLookup {
+		// hash multihash for double-hashing implementation
+		mhHash, extraByteLength := internal.Sha256Multihash(key)
+		extraBitLength := extraByteLength * 8
+		logger.Debugw("finding providers", "cid", key, "mhHash", mhHash, "mh", internal.LoggableProviderRecordBytes(key))
+
+		// note: extra bits are added b/c of the multihash code + digest length
+		lookupKey := internal.PrefixByBits(mhHash, prefixLength+extraBitLength)
+		decKey = enc.MultihashToKey(key) 
+		sendPeerRequest = func (p peer.ID) ([]*peer.AddrInfo, []*peer.AddrInfo, error) {
+			return dht.protoMessenger.GetProvidersByPrefix(ctx, p, lookupKey, mhHash) 
+		}
+	} else {
+		mhHash = key
+		sendPeerRequest = func (p peer.ID) ([]*peer.AddrInfo, []*peer.AddrInfo, error) {
+			return dht.protoMessenger.GetProvidersDefault(ctx, p, key)
+		}
+	}
+
 	provs, err := dht.providerStore.GetProviders(ctx, mhHash) // +added
 	if err != nil {
 		return
 	}
 
-	decKey := enc.MultihashToKey(key)
-	mylogger.Infof("decKey: %v", decKey)
 	for _, p := range provs {
 		logger.Infof("got provider from local store: %x", p)
 		// decrypt peer record if needed
-		if len(p) == encryptedPeerIDLength {
-			mylogger.Info("encrypted peerID: %v", p)
+		if secureLookup && len(p) == encryptedPeerIDLength {
 			ptPeer, err := enc.DecryptAES([]byte(p), decKey)
 			if err != nil {
 				logger.Errorf("failed to decrypt encrypted peer ID: %s", err)
@@ -593,16 +622,13 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 				continue
 			}
 			p = peer.ID(ptPeer)
-			mylogger.Info("decrypted peerID : %v", p)
-//+added
 		}
 
 		// NOTE: Assuming that this list of peers is unique
 		if psTryAdd(p) {
-			addrInfo := dht.peerstore.PeerInfo(p) //+added
+			addrInfo := dht.peerstore.PeerInfo(p)
 			select {
-			// case peerOut <- p:  //-removed
-			case peerOut <- addrInfo: //+added
+			case peerOut <- addrInfo:
 			case <-ctx.Done():
 				return
 			}
@@ -615,10 +641,6 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 		}
 	}
 
-	// note: extra bits are added b/c of the multihash code + digest length
-	lookupKey := internal.PrefixByBits(mhHash, prefixLength+extraBitLength)
-
-	mylogger.Info("going for lookup")
 	runLookupWithFollowupCalls := 0
 	lookupRes, err := dht.runLookupWithFollowup(ctx, string(mhHash),
 		func(ctx context.Context, p peer.ID) ([]*peer.AddrInfo, error) {
@@ -630,11 +652,11 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 			})
 
 			// if peer doesn't support such feature don't even bother to query him :)
-			if ! dht.peerstore.HasFeatures(p, pb.IPFS_DH_GET_PROVIDERS) { 
+			if ! dht.peerstore.HasFeatures(p, feature) { 
 				return []*peer.AddrInfo{}, nil
 			}
 
-			provs, closer, err := dht.protoMessenger.GetProvidersByPrefix(ctx, p, lookupKey, mhHash) 
+			provs, closer, err := sendPeerRequest(p)
 			if err != nil {
 				return nil, err
 			}
@@ -643,8 +665,8 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 
 			// Add unique providers from request, up to 'count'
 			for _, prov := range provs {
-				// decrypt peer record if needed
-				if len(prov.ID) == encryptedPeerIDLength {
+				// decrypt peer record if needed (TODO: think should I remove this?)
+				if secureLookup && len(prov.ID) == encryptedPeerIDLength {
 					mylogger.Info("encrypted peerID: %v", prov.ID)
 					ptPeer, err := enc.DecryptAES([]byte(prov.ID), decKey)
 					if err != nil {
@@ -684,7 +706,7 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 		func() bool {
 			return !findAll && psSize() >= count
 		},
-		pb.IPFS_DH_GET_PROVIDERS,
+		feature,
 	)
 
 	if err == nil && ctx.Err() == nil {

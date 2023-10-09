@@ -2263,6 +2263,34 @@ func TestFeaturesProperlySet(t *testing.T) {
 		host.Close()
 	}
 }
+
+// just to be sure that when a CID is resolved its is not 
+// stored in some type of cache at the DHT level.)
+func TestNoCache(t *testing.T) {
+	ctx_1, cancel := context.WithCancel(context.Background())
+
+
+	dht_1 := setupDHT(ctx_1, t, false)
+	dht_2 := setupDHT(context.Background(), t, false)
+	
+	connect(t, context.Background(), dht_1, dht_2);
+
+	dht_1.Provide(context.Background(), testCaseCids[0], false)	
+
+	provs, err := dht_2.FindProviders(context.Background(), testCaseCids[0])
+
+	require.Nil(t, err);
+	require.Equal(t, 1, len(provs))
+
+	cancel()
+	dht_1.Close()
+
+	provs, err = dht_2.FindProviders(context.Background(), testCaseCids[0])
+
+	require.Nil(t, err);
+	require.Equal(t, 0, len(provs))
+}
+
 /*
 func TestFeaturesProperlySet(t *testing.T) {
 	dht := setupDHT(context.Background(), t, false)
