@@ -537,9 +537,11 @@ func (dht *IpfsDHT) FindProvidersAsync(ctx context.Context, key cid.Cid, count i
 	}
 	peerOut := make(chan peer.AddrInfo, chSize)
 
+
+	mylogger.Infof("looking for cid: %v", key)
+
 	keyMH := key.Hash()
 
-	mylogger.Infof("hash digest of the key: %v", key)
 	logger.Debugw("finding providers", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
 	go dht.findProvidersAsyncRoutine(ctx, keyMH, count, peerOut)
 	return peerOut
@@ -554,14 +556,16 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 	cidtype, ok := ctx.Value("cidtype").(string)
 	if ok && cidtype == "Normal" {
 		feature = pb.IPFS_ADD_PROVIDERS
+		mylogger.Info("Doing Normal lookup")
+	} else {
+		mylogger.Info("Doing Secure lookup")
 	}
 
-	secureLookup := feature == pb.IPFS_DH_ADD_PROVIDERS
+	secureLookup := feature == pb.IPFS_DH_GET_PROVIDERS
+
+	mylogger.Infof("secureLookup: %v", secureLookup)
 
 	findAll := count == 0
-	prefixLength := prefixLookupBitLength
-
-
 	ps := make(map[peer.ID]struct{})
 
 	psLock := &sync.Mutex{}
@@ -588,6 +592,8 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 	)
 
 	if secureLookup {
+		prefixLength := prefixLookupBitLength
+
 		// hash multihash for double-hashing implementation
 		mhHash, extraByteLength := internal.Sha256Multihash(key)
 		extraBitLength := extraByteLength * 8
