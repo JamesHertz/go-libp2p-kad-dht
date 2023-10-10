@@ -397,7 +397,6 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 		start_time = time.Now()
 		lk = sync.Mutex{}
 		saved []peer.ID
-
 	)
 
 	defer func(){

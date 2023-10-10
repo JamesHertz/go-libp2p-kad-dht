@@ -48,8 +48,8 @@ var (
 )
 
 func init() {
-	logging.SetLogLevel("new-dht", "INFO")
-	logging.SetLogLevel("dht", "INFO")
+	// logging.SetLogLevel("new-dht", "INFO")
+	// logging.SetLogLevel("dht", "INFO")
 }
 
 const (
