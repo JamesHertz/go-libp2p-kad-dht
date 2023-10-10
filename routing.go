@@ -592,10 +592,12 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 	)
 
 	if secureLookup {
+
+		var extraByteLength int
 		prefixLength := prefixLookupBitLength
 
 		// hash multihash for double-hashing implementation
-		mhHash, extraByteLength := internal.Sha256Multihash(key)
+		mhHash, extraByteLength = internal.Sha256Multihash(key)
 		extraBitLength := extraByteLength * 8
 		logger.Debugw("finding providers", "cid", key, "mhHash", mhHash, "mh", internal.LoggableProviderRecordBytes(key))
 
