@@ -372,8 +372,7 @@ func makeDHT(ctx context.Context, h host.Host, cfg dhtcfg.Config) (*IpfsDHT, err
 	if cfg.ProviderStore != nil {
 		dht.providerStore = cfg.ProviderStore
 	} else {
-		// dht.providerStore, err = providers.NewProviderManager(dht.ctx, h.ID(), dht.peerstore, cfg.Datastore) // -removed
-		dht.providerStore, err = providers.NewProviderManager(dht.ctx, h.ID(), cfg.Datastore) //+added
+		dht.providerStore, err = providers.NewProviderManager(dht.ctx, h.ID(), cfg.Datastore)
 		if err != nil {
 			return nil, fmt.Errorf("initializing default provider manager (%v)", err)
 		}
@@ -722,14 +721,6 @@ func (dht *IpfsDHT) FindLocal(id peer.ID) peer.AddrInfo {
 	}
 }
 
-/* -removed
-// nearestPeersToQuery returns the routing tables closest peers.
-func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) []peer.ID {
-	closer := dht.routingTable.NearestPeers(kb.ConvertKey(string(pmes.GetKey())), count)
-	return closer
-}
-*/
-
 // nearestPeersToQuery returns the routing tables closest peers.Digest
 func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) ([]peer.ID, error) {
 	key := pmes.GetKey()
@@ -765,12 +756,10 @@ func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) ([]peer.ID,
 func (dht *IpfsDHT) betterPeersToQuery(pmes *pb.Message, from peer.ID, count int) []peer.ID {
 	closer, err := dht.nearestPeersToQuery(pmes, count)
 
-	//+added
 	if err != nil {
 		logger.Errorf("key decoding error: %w", err)
 		return nil
 	}
-	//+added
 
 	// no node? nil
 	if closer == nil {

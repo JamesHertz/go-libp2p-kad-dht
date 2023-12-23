@@ -45,15 +45,9 @@ var log = logging.Logger("providers")
 
 // ProviderStore represents a store that associates peers and their addresses to keys.
 type ProviderStore interface {
-	/* - removed
-	AddProvider(ctx context.Context, key []byte, prov peer.AddrInfo) error
-	GetProviders(ctx context.Context, key []byte) ([]peer.AddrInfo, error)
-	*/
-// +added
 	AddProvider(ctx context.Context, key []byte, prov peer.ID) error
 	GetProviders(ctx context.Context, key []byte) ([]peer.ID, error)
 	GetProvidersForPrefix(ctx context.Context, key []byte, prefixBitLength int) (map[string][]peer.ID, error)
-// +added
 }
 
 // ProviderManager adds and pulls providers out of the datastore,
@@ -63,32 +57,22 @@ type ProviderManager struct {
 	// all non channel fields are meant to be accessed only within
 	// the run method
 	cache  lru.LRUCache
-	// pstore peerstore.Peerstore // -removed
 	dstore *autobatch.Datastore
-/* -removed
-	newprovs chan *addProv
-	getprovs chan *getProv
-	proc     goprocess.Process
-*/
 
-// +added
     newprovs         chan *addProv
     getprovs         chan *getProv
     getProvsByPrefix chan *getProvByPrefix
     proc             goprocess.Process
-// +added
 
 	cleanupInterval time.Duration
 }
 
-// +added
 type getProvByPrefix struct {
 	ctx             context.Context
 	key             []byte
 	prefixBitLength int
 	resp            chan map[string][]peer.ID
 }
-// +added
 
 var _ ProviderStore = (*ProviderManager)(nil)
 
@@ -135,15 +119,13 @@ type getProv struct {
 }
 
 // NewProviderManager constructor
-// func NewProviderManager(ctx context.Context, local peer.ID, ps peerstore.Peerstore, dstore ds.Batching, opts ...Option) (*ProviderManager, error) { // - removed
-func NewProviderManager(ctx context.Context, local peer.ID, dstore ds.Batching, opts ...Option) (*ProviderManager, error) {  // +added
+func NewProviderManager(ctx context.Context, local peer.ID, dstore ds.Batching, opts ...Option) (*ProviderManager, error) {
 
 	pm := new(ProviderManager)
 	pm.self = local
 	pm.getprovs = make(chan *getProv)
 	pm.newprovs = make(chan *addProv)
-	pm.getProvsByPrefix = make(chan *getProvByPrefix) //+added
-	// pm.pstore = ps // -removed
+	pm.getProvsByPrefix = make(chan *getProvByPrefix)
 	pm.dstore = autobatch.NewAutoBatching(dstore, batchBufferSize)
 	cache, err := lru.NewLRU(lruCacheSize, nil)
 	if err != nil {
@@ -205,7 +187,6 @@ func (pm *ProviderManager) run(ctx context.Context, proc goprocess.Process) {
 
 			// set the cap so the user can't append to this.
 			gp.resp <- provs[0:len(provs):len(provs)]
-// +added
 			continue
 
 
@@ -218,7 +199,7 @@ func (pm *ProviderManager) run(ctx context.Context, proc goprocess.Process) {
 			// set the cap so the user can't append to this.
 			gp.resp <- provs.keyToProviders
 			continue
-// +added
+
 		case res, ok := <-gcQueryRes:
 			if !ok {
 				if err := gcQuery.Close(); err != nil {
@@ -282,18 +263,11 @@ func (pm *ProviderManager) run(ctx context.Context, proc goprocess.Process) {
 }
 
 // AddProvider adds a provider
-func (pm *ProviderManager) AddProvider(ctx context.Context, k []byte, provInfo peer.ID) error { // +added
-/* -removed
-func (pm *ProviderManager) AddProvider(ctx context.Context, k []byte, provInfo peer.AddrInfo) error {
-	if provInfo.ID != pm.self { // don't add own addrs.
-		pm.pstore.AddAddrs(provInfo.ID, provInfo.Addrs, ProviderAddrTTL)
-	}
-*/
+func (pm *ProviderManager) AddProvider(ctx context.Context, k []byte, provInfo peer.ID) error { 
 	prov := &addProv{
 		ctx: ctx,
 		key: k,
-		val: provInfo, // +added
-		// val: provInfo.ID, -removed
+		val: provInfo,
 	}
 	select {
 	case pm.newprovs <- prov:
@@ -307,8 +281,7 @@ func (pm *ProviderManager) AddProvider(ctx context.Context, k []byte, provInfo p
 func (pm *ProviderManager) addProv(ctx context.Context, k []byte, p peer.ID) error {
 	now := time.Now()
 	if provs, ok := pm.cache.Get(string(k)); ok {
-		// provs.(*providerSet).setVal(p, now) -removed
-		provs.(*providerSet).setVal(p, k, now) // +added
+		provs.(*providerSet).setVal(p, k, now)
 
 	} // else not cached, just write through
 
@@ -330,14 +303,12 @@ func mkProvKeyFor(k []byte, p peer.ID) string {
 }
 
 func mkProvKey(k []byte) string {
-	// return ProvidersKeyPrefix + base32.RawStdEncoding.EncodeToString(k) // -removed
-	return ProvidersKeyPrefix + hex.EncodeToString(k) // +added
+	return ProvidersKeyPrefix + hex.EncodeToString(k)
 }
 
 // GetProviders returns the set of providers for the given key.
 // This method _does not_ copy the set. Do not modify it.
-func (pm *ProviderManager) GetProviders(ctx context.Context, k []byte) ([]peer.ID, error) { // +added
-// func (pm *ProviderManager) GetProviders(ctx context.Context, k []byte) ([]peer.AddrInfo, error) { -removed
+func (pm *ProviderManager) GetProviders(ctx context.Context, k []byte) ([]peer.ID, error) {
 	gp := &getProv{
 		ctx:  ctx,
 		key:  k,
@@ -352,8 +323,7 @@ func (pm *ProviderManager) GetProviders(ctx context.Context, k []byte) ([]peer.I
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case peers := <-gp.resp:
-		// return peerstoreImpl.PeerInfos(pm.pstore, peers), nil // -removed
-		return peers, nil // +added
+		return peers, nil
 	}
 }
 
@@ -399,59 +369,14 @@ func loadProviderSet(ctx context.Context, dstore ds.Datastore, k []byte) (*provi
 		if !ok {
 			break
 		}
-/* -removed
-		if e.Error != nil {
-			log.Error("got an error: ", e.Error)
-			continue
-		}
 
-		// check expiration time
-		t, err := readTimeValue(e.Value)
-		switch {
-		case err != nil:
-			// couldn't parse the time
-			log.Error("parsing providers record from disk: ", err)
-			fallthrough
-		case now.Sub(t) > ProvideValidity:
-			// or just expired
-			err = dstore.Delete(ctx, ds.RawKey(e.Key))
-			if err != nil && err != ds.ErrNotFound {
-				log.Error("failed to remove provider record from disk: ", err)
-			}
-			continue
-		}
-*/
-
-// +added
 		pid, decKey, t, err := handleQueryKey(ctx, dstore, e, now)
 		if err != nil {
 			log.Debugf("failed to handle query key: %s", err)
 			continue
 		}
-// +added
 
-/* -removed
-		lix := strings.LastIndex(e.Key, "/")
-		decstr, err := base32.RawStdEncoding.DecodeString(e.Key[lix+1:]) // -removed
-		if err != nil {
-			log.Error("base32 decoding error: ", err)
-			err = dstore.Delete(ctx, ds.RawKey(e.Key))
-			if err != nil && err != ds.ErrNotFound {
-				log.Error("failed to remove provider record from disk: ", err)
-			}
-			continue
-		}
-
-		pid := peer.ID(decstr)
-
-		out.setVal(pid, t)
-	}
-
-	return out, nil
-}
-*/
-
-		out.setVal(pid, decKey, t) // added
+		out.setVal(pid, decKey, t) 
 	}
 		
 	return out, nil

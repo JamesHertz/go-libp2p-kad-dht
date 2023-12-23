@@ -217,7 +217,7 @@ func (dht *IpfsDHT) runQuery(ctx context.Context, target string, queryFn queryFn
 		key:        target,
 		ctx:        ctx,
 		dht:        dht,
-		queryPeers: qpset, // +added
+		queryPeers: qpset,
 		seedPeers:  seedPeers,
 		peerTimes:  make(map[peer.ID]time.Duration),
 		terminated: false,
@@ -463,8 +463,7 @@ func (q *query) terminate(ctx context.Context, cancel context.CancelFunc, reason
 // queryPeer does not access the query state in queryPeers!
 func (q *query) queryPeer(ctx context.Context, ch chan<- *queryUpdate, p peer.ID) {
 	defer q.waitGroup.Done()
-	// dialCtx, queryCtx := ctx, ctx //-removed
-	dialCtx, queryCtx := ctx, q.ctx //+added
+	dialCtx, queryCtx := ctx, q.ctx
 
 
 	// dial the peer

@@ -152,8 +152,7 @@ func NewFullRT(h host.Host, protocolPrefix protocol.ID, options ...Option) (*Ful
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// pm, err := providers.NewProviderManager(ctx, h.ID(), h.Peerstore(), dhtcfg.Datastore, fullrtcfg.pmOpts...) // removed
-	pm, err := providers.NewProviderManager(ctx, h.ID(), dhtcfg.Datastore) // +added
+	pm, err := providers.NewProviderManager(ctx, h.ID(), dhtcfg.Datastore)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -838,8 +837,7 @@ func (dht *FullRT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err e
 	}
 
 	successes := dht.execOnMany(ctx, func(ctx context.Context, p peer.ID) error {
-		// err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.h) //-removed
-		err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.h, []byte(dht.h.ID())) //+added
+		err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.h, []byte(dht.h.ID()))
 
 		return err
 	}, peers, true)
@@ -950,14 +948,8 @@ func (dht *FullRT) ProvideMany(ctx context.Context, keys []multihash.Multihash) 
 	}
 
 	fn := func(ctx context.Context, p, k peer.ID) error {
-		/*-removed
-		pmes := dht_pb.NewMessage(pb.IPFS_ADD_PROVIDERS, multihash.Multihash(k), 0)
-		pmes.ProviderPeers = pbPeers
-		*/
-//+added
 		pmes := dht_pb.NewMessage(dht_pb.IPFS_DH_ADD_PROVIDERS, multihash.Multihash(k), 0)
 		pmes.ProviderPeersII = dht_pb.PeersToPeersWithKey(pbPeers)
-//+added
 
 		return dht.messageSender.SendMessage(ctx, p, pmes)
 	}
@@ -1265,7 +1257,7 @@ func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.
 		return len(ps)
 	}
 
-	provs, err := dht.ProviderManager.GetProviders(ctx, mhHash[:]) // +added
+	provs, err := dht.ProviderManager.GetProviders(ctx, mhHash[:])
 
 	if err != nil {
 		return
@@ -1308,9 +1300,6 @@ func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.
 		)
 		provs, closer, err = dht.protoMessenger.GetProviders(ctx, p, key)
 
-		/* -removed
-			provs, closest, err := dht.protoMessenger.GetProviders(ctx, p, key)
-		*/
 		if err != nil {
 			return err
 		}
@@ -1332,21 +1321,18 @@ func (dht *FullRT) findProvidersAsyncRoutine(ctx context.Context, key multihash.
 			}
 			if !findAll && psSize() >= count {
 				logger.Debugf("got enough providers (%d/%d)", psSize(), count)
-				// cancelquery() //-removed
 				return nil
 			}
 		}
 
 		// Give closer peers back to the query to be queried
-		logger.Debugf("got closer peers: %d %s", len(closer), closer) //+added
-		// logger.Debugf("got closer peers: %d %s", len(closest), closest) //-removed
+		logger.Debugf("got closer peers: %d %s", len(closer), closer)
 
 
 		routing.PublishQueryEvent(ctx, &routing.QueryEvent{
 			Type:      routing.PeerResponse,
 			ID:        p,
-			Responses: closer, //+added
-			// Responses: closest,
+			Responses: closer,
 		})
 		return nil
 	}

@@ -332,22 +332,6 @@ func (dht *IpfsDHT) handleDhGetProviders(ctx context.Context, p peer.ID, pmes *p
 	}
 
 	return resp, nil
-	/* -removed
-	// setup providers
-	providers, err := dht.providerStore.GetProviders(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	resp.ProviderPeers = pb.PeerInfosToPBPeers(dht.host.Network(), providers)
-
-	// Also send closer peers.
-	closer := dht.betterPeersToQuery(pmes, p, dht.bucketSize)
-	if closer != nil {
-		// TODO: pstore.PeerInfos should move to core (=> peerstore.AddrInfos).
-		infos := pstore.PeerInfos(dht.peerstore, closer)
-		resp.CloserPeers = pb.PeerInfosToPBPeers(dht.host.Network(), infos)
-	}
-	*/
 
 }
 
@@ -361,26 +345,6 @@ func (dht *IpfsDHT) handleDhAddProvider(ctx context.Context, p peer.ID, pmes *pb
 
 	logger.Debugw("adding DH provider", "from", p, "key", internal.LoggableProviderRecordBytes(key))
 
-	// add provider should use the address given in the message
-	/* -removed
-	pinfos := pb.PBPeersToPeerInfos(pmes.GetProviderPeers())
-	for _, pi := range pinfos {
-		if pi.ID != p {
-			// we should ignore this provider record! not from originator.
-			// (we should sign them and check signature later...)
-			logger.Debugw("received provider from wrong peer", "from", p, "peer", pi.ID)
-			continue
-		}
-
-		if len(pi.Addrs) < 1 {
-			logger.Debugw("no valid addresses for provider", "from", p)
-			continue
-		}
-
-		dht.providerStore.AddProvider(ctx, key, peer.AddrInfo{ID: p})
-	}
-	*/
-	// +added
 	provs := pmes.GetProviderPeersII()
 	pinfos := pb.PBPeersToAddrInfos(provs)
 	for i, pi := range pinfos {
@@ -390,8 +354,7 @@ func (dht *IpfsDHT) handleDhAddProvider(ctx context.Context, p peer.ID, pmes *pb
 		}
 
 		sig := provs[i].Signature
-		pub, err := crypto.UnmarshalPublicKey(provs[i].PublicKey) //+added
-		// pub, err := crypto.PublicKeyFromProto(provs[i].PublicKey) //-removed
+		pub, err := crypto.UnmarshalPublicKey(provs[i].PublicKey) 
 		if err != nil {
 			logger.Debugw("failed to unmarshal public key", "from", p, "peer", pi.ID, "error", err)
 			continue
@@ -429,7 +392,6 @@ func (dht *IpfsDHT) handleDhAddProvider(ctx context.Context, p peer.ID, pmes *pb
 	}
 
 	return nil, nil
-	// +added
 
 }
 

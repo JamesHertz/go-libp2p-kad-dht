@@ -134,21 +134,11 @@ func (pm *ProtocolMessenger) GetClosestPeers(ctx context.Context, p peer.ID, id 
 }
 
 // PutProvider asks a peer to store that we are a provider for the given key.
-// func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key multihash.Multihash, host host.Host) error { -removed
 func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key multihash.Multihash, host host.Host, encID []byte) error {
-// +added
 	pi := peer.AddrInfo{
    		ID:    peer.ID(encID),
 		Addrs: host.Addrs(),
 	}	
-// +added
-
-/* -removed
-	pi := peer.AddrInfo{
-		ID:    host.ID(),
-		Addrs: host.Addrs(),
-	}
-*/
 
 	// TODO: We may want to limit the type of addresses in our provider records
 	// For example, in a WAN-only DHT prohibit sharing non-WAN addresses (e.g. 192.168.0.100)
@@ -156,12 +146,6 @@ func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key mul
 		return fmt.Errorf("no known addresses for self, cannot put provider")
 	}
 
-/* -removed
-	pmes := NewMessage(IPFS_ADD_PROVIDERS, key, 0)
-	pmes.ProviderPeers = RawPeerInfosToPBPeers([]peer.AddrInfo{pi})
-*/
-
-// +added
 	// sign ( key || encID )
 	privKey := host.Peerstore().PrivKey(host.ID())
 	sig, err := privKey.Sign(append(key, encID...))
@@ -172,8 +156,6 @@ func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key mul
 	pubKey := host.Peerstore().PubKey(host.ID())
 	// TODO: an method for pbPubKey.Marshall()
 	pbPubKey, err := crypto.MarshalPublicKey(pubKey)
-	// pbPubKey, err := crypto.PublicKeyToProto(pubKey)
-	// bytesPubKey, err := crypto.MarshalPublicKey(pubKey)
 	if err != nil {
 		return err
 	}
@@ -182,12 +164,10 @@ func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key mul
 	pmes.ProviderPeersII = PeersToPeersWithKey(RawPeerInfosToPBPeers([]peer.AddrInfo{pi}))
 	pmes.ProviderPeersII[0].Signature = sig
 	pmes.ProviderPeersII[0].PublicKey = pbPubKey
-// +added
 
 	return pm.m.SendMessage(ctx, p, pmes)
 }
 
-// +added
 // GetProviders asks a peer for the providers it knows of for a given key. Also returns the K closest peers to the key
 // as described in GetClosestPeers.
 func (pm *ProtocolMessenger) GetProviders(

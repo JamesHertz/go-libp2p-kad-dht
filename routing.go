@@ -28,7 +28,6 @@ import (
 	logging "github.com/ipfs/go-log"
 )
 
-// +added
 const (
 	keySize               = 32
 	encryptedPeerIDLength = 66
@@ -36,7 +35,6 @@ const (
 
 var provLog = logging.Logger("dht-exp/provide")
 
-// +added
 
 // This file implements the Routing interface for the IpfsDHT struct.
 
@@ -408,12 +406,6 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 
 
 	keyMH := key.Hash()
-	// logger.Debugw("providing", "cid", key, "mh", internal.LoggableProviderRecordBytes(keyMH))
-
-	// add self locally
-	// dht.providerStore.AddProvider(ctx, keyMH, peer.AddrInfo{ID: dht.self}) -- removed
-
-	// +added
 
 	// hash multihash for double-hashing implementation
 	mhHash, _ := internal.Sha256Multihash(keyMH)
@@ -430,7 +422,6 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 		return err
 	}
 
-	// +added
 	if !brdcst {
 		return nil
 	}
@@ -457,8 +448,7 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 	}
 
 	var exceededDeadline bool
-	// peers, err := dht.GetClosestPeers(closerCtx, string(keyMH)) - removed
-	peers, err := dht.GetClosestPeers(closerCtx, string(mhHash[:]), pb.IPFS_DH_ADD_PROVIDERS) // +added
+	peers, err := dht.GetClosestPeers(closerCtx, string(mhHash[:]), pb.IPFS_DH_ADD_PROVIDERS)
 	switch err {
 	case context.DeadlineExceeded:
 		// If the _inner_ deadline has been exceeded but the _outer_
@@ -478,10 +468,8 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 		wg.Add(1)
 		go func(p peer.ID) {
 			defer wg.Done()
-			// logger.Debugf("putProvider(%s, %s)", internal.LoggableProviderRecordBytes(keyMH), p) - removed
-			// err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.host) - removed
-			logger.Debugf("putProvider(%s, %s)", internal.LoggableProviderRecordBytes(mhHash[:]), p) // +added
-			err := dht.protoMessenger.PutProvider(ctx, p, mhHash[:], dht.host, []byte(ct))           // + added
+			logger.Debugf("putProvider(%s, %s)", internal.LoggableProviderRecordBytes(mhHash[:]), p)
+			err := dht.protoMessenger.PutProvider(ctx, p, mhHash[:], dht.host, []byte(ct))
 
 			if err != nil {
 				logger.Debug(err)
@@ -510,8 +498,7 @@ func (dht *IpfsDHT) FindProviders(ctx context.Context, c cid.Cid) ([]peer.AddrIn
 	}
 
 	var providers []peer.AddrInfo
-	// 	for p := range dht.FindProvidersAsync(ctx, c, dht.bucketSize) { - removed
-	for p := range dht.FindProvidersAsync(ctx, c, 0) { // +added
+	for p := range dht.FindProvidersAsync(ctx, c, 0) { 
 		providers = append(providers, p)
 	}
 	return providers, nil
@@ -613,7 +600,7 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 		}
 	}
 
-	provs, err := dht.providerStore.GetProviders(ctx, mhHash) // +added
+	provs, err := dht.providerStore.GetProviders(ctx, mhHash)
 	if err != nil {
 		return
 	}
