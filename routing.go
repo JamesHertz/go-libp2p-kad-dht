@@ -431,6 +431,11 @@ func (dht *IpfsDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) (err 
 			err := dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.host)
 			if err != nil {
 				logger.Debug(err)
+			} else {
+				routing.PublishQueryEvent(ctx, &routing.QueryEvent{
+					Type: routing.FinalPeer,
+					ID:   p,
+				})
 			}
 		}(p)
 	}
